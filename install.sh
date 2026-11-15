@@ -12,6 +12,10 @@ mkdir -p "$DEST"
 cp "$SRC"/*.sh "$DEST/"
 chmod 755 "$DEST"/*.sh
 echo "Telepítve: $(cd "$SRC" && ls *.sh | sed "s|^|$DEST/|" | tr '\n' ' ')"
+# `tablet` parancs (Claude ezzel vezérli a tabletet: képernyőkép, koppintás, gépelés)
+mkdir -p "$HOME/bin"
+for f in tablet tablet-findport; do [ -e "$HOME/bin/$f" ] || ln -s "$(dirname "$SRC")/bin/$f" "$HOME/bin/$f"; done
+echo "Parancs: ~/bin/tablet  (súgó: tablet)"
 cat <<'MSG'
 
 KÉZI LÉPÉS (egyszer, a Termux alkalmazásban – nem a proot-ban!):

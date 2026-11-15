@@ -97,6 +97,12 @@ textarea{flex:1;resize:none;border:0;outline:0;background:none;color:var(--text)
 /* --- mappaválasztó --- */
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:0;width:min(560px,94vw);max-height:84dvh}
 dialog::backdrop{background:#0008}
+#setup .row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+#setup .ic{font-size:20px;width:26px;text-align:center}
+#setup .tx{flex:1;min-width:0}#setup .tx small{display:block;color:var(--dim);margin-top:2px}
+#setup button.fix{padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2,#2a2924);color:inherit;font:inherit}
+#updbar{display:none;position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:50;background:var(--accent,#d97757);color:#fff;border-radius:14px;padding:10px 14px;gap:10px;align-items:center;box-shadow:0 6px 24px #0006;max-width:94vw}
+#updbar button{background:#fff3;border:0;color:#fff;border-radius:9px;padding:7px 12px;font:inherit}
 .dh{display:flex;align-items:center;gap:6px;padding:12px;border-bottom:1px solid var(--line)}
 .dh .path{flex:1;font:14px ui-monospace,monospace;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 .dl{overflow:auto;max-height:56dvh;padding:6px}
@@ -183,6 +189,7 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
       <span style="color:var(--muted)">▾</span>
     </button>
     <button class="newbtn" onclick="newChat()">＋ Új beszélgetés</button>
+    <button class="chip" id="setupBtn" style="display:none;margin:0 12px 8px;text-align:center" onclick="drawer(false);openSetup()">✓ Beállítás-ellenőrző</button>
     <div class="sect">Korábbi beszélgetések <button onclick="loadSessions()">↻</button></div>
     <div class="list" id="sessions"></div>
     <div class="foot">
@@ -203,6 +210,8 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
         <select id="bubble" onchange="ClaudeApp.setBubble(this.value==='1');setTimeout(syncBubble,1500)"><option value="0">Ki</option><option value="1">Be</option></select></label>
       <label id="bubbleRow" style="display:none">Lebegő Claude-gomb
         <select id="bubbleSel" onchange="window.ClaudeApp&&ClaudeApp.setBubble(this.value==='1')"><option value="0">Ki</option><option value="1">Be</option></select></label>
+      <label id="agentRow" style="display:none">Tabletvezérlés (képernyőkép, koppintás)
+        <button class="chip" style="text-align:center" id="agentBtn" onclick="ClaudeApp.openAgentSettings()">…</button></label>
       <label>Téma
         <select id="theme"><option value="dark">Sötét</option><option value="light">Világos</option></select></label>
     </div>
@@ -251,6 +260,13 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
 <div class="rail r none" id="railR" onclick="railInfo('r')" title="Kontextus"><div class="tr"><div class="fl"></div></div></div>
 <div class="banner" id="banner" hidden><i></i><span>A motor nem fut – újracsatlakozás…</span></div>
 
+<dialog id="setup">
+  <div style="display:flex;align-items:center;padding:14px 16px"><b style="flex:1;font-size:17px">Beállítás-ellenőrző</b>
+    <button class="ib" onclick="setupDlg.close()" aria-label="Bezár">✕</button></div>
+  <div id="setupList"></div>
+  <div style="padding:10px 16px 16px;color:var(--dim);font-size:13px">A ✗ sorok gombjával a hiányzó engedély egy lépésben megadható. Később a menüből újra megnyitható.</div>
+</dialog>
+<div id="updbar"><span id="updtx"></span><button id="updgo">Letöltés</button><button onclick="updLater()">Később</button></div>
 <dialog id="picker">
   <div class="dh">
     <button class="ib" onclick="browse(pick.parent)" aria-label="Fel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
@@ -903,7 +919,71 @@ applyTheme(); setBusy(false); autosize();
 <script>
 (function(){ const A=window.ClaudeApp; if(!A||!A.setBubble) return;
   const r=document.getElementById('bubbleRow'), sel=document.getElementById('bubbleSel'); r.style.display='';
-  const sync=()=>{ try{ sel.value=A.bubbleOn()?'1':'0'; }catch(e){} }; sync(); setInterval(sync,3000); })();
+  const ar=document.getElementById('agentRow'), ab=document.getElementById('agentBtn');
+  if(A.agentState) ar.style.display='';
+  const sync=()=>{ try{ sel.value=A.bubbleOn()?'1':'0';
+    if(A.agentState){ const st=A.agentState(); ab.textContent=['✗ Kikapcsolva – bekapcsolás','… Be, kapcsolódik a motorhoz','✓ Működik'][st]; ab.disabled=st===2; } }catch(e){} };
+  sync(); setInterval(sync,3000); })();
+</script>
+<script>
+// ---- Beállítás-ellenőrző (első indításkor magától, ha valami hiányzik) ----
+const setupDlg = document.getElementById('setup');
+async function setupItems() {
+  const A = window.ClaudeApp; let p = {}, h = {};
+  try { p = JSON.parse(A.perms()); } catch (e) {}
+  try { h = await (await fetch('/api/health')).json(); } catch (e) {}
+  return [
+    { ok: true, t: 'Motor (Termux + szerver)', d: 'Fut' + (h.version ? ' – ' + h.version : '') },
+    { ok: !!h.claude, t: 'Claude Code telepítve', d: h.claude ? 'Megvan' : 'Ubuntuban: npm install -g @anthropic-ai/claude-code' },
+    { ok: !!h.login, t: 'Bejelentkezve Claude-ba', d: h.login ? 'Rendben' : 'Ubuntuban egyszer futtasd: claude (és jelentkezz be)' },
+    { ok: p.notif, t: 'Értesítések', d: 'Szól, ha egy hosszú feladat elkészült', fix: 'notif' },
+    { ok: p.mic, t: 'Mikrofon', d: p.voice === false ? 'Nincs beszédfelismerő – telepítsd a Google appot' : 'Diktáláshoz', fix: 'mic' },
+    { ok: p.overlay, t: 'Lebegő gomb engedély', d: '„Megjelenítés más alkalmazások felett”', fix: 'overlay' },
+    { ok: p.agent && p.agentConn, t: 'Tabletvezérlés', d: !p.agent ? (p.sdk >= 33 ? 'Akadálymentesség → Claude Tablet. Ha szürke: App-infó → ⋮ → „Korlátozott beállítások engedélyezése”' : 'Akadálymentesség → Claude Tablet – tabletvezérlés')
+        : p.agentConn ? 'Működik (képernyőkép, koppintás, gépelés)' : 'Be van kapcsolva, kapcsolódik a motorhoz…', fix: p.agent ? null : 'agent', fix2: p.agent || p.sdk < 33 ? null : 'app' },
+  ];
+}
+async function openSetup() {
+  const items = await setupItems(), el = document.getElementById('setupList'); el.innerHTML = '';
+  for (const it of items) {
+    const r = document.createElement('div'); r.className = 'row';
+    r.innerHTML = `<span class="ic">${it.ok ? '✅' : '❌'}</span><div class="tx">${it.t}<small></small></div>`;
+    r.querySelector('small').textContent = it.d || '';
+    if (!it.ok && it.fix) { const b = document.createElement('button'); b.className = 'fix'; b.textContent = 'Megadás'; b.onclick = () => ClaudeApp.requestPerm(it.fix); r.append(b); }
+    if (!it.ok && it.fix2) { const b = document.createElement('button'); b.className = 'fix'; b.textContent = 'App-infó'; b.onclick = () => ClaudeApp.requestPerm(it.fix2); r.append(b); }
+    el.append(r);
+  }
+  if (!setupDlg.open) setupDlg.showModal();
+  return items;
+}
+// visszatérve a beállításokból frissül a lista
+document.addEventListener('visibilitychange', () => { if (!document.hidden && setupDlg.open) openSetup(); });
+// ---- Frissítés-értesítés: a GitHubon lévő dist/version.json alapján, naponta egyszer ----
+const UPD_URL = 'https://raw.githubusercontent.com/fferi16/claude-tablet/main/dist/version.json';
+function updLater() { document.getElementById('updbar').style.display = 'none'; localStorage.setItem('ct_updSkip', String(Date.now())); }
+async function checkUpdate(force) {
+  const A = window.ClaudeApp; if (!A || !A.appVersion) return;
+  const last = +localStorage.getItem('ct_updChecked') || 0, skip = +localStorage.getItem('ct_updSkip') || 0;
+  if (!force && (Date.now() - last < 6 * 3600e3 || Date.now() - skip < 24 * 3600e3)) return;
+  try {
+    const v = await (await fetch(UPD_URL + '?t=' + Date.now(), { cache: 'no-store' })).json();
+    localStorage.setItem('ct_updChecked', String(Date.now()));
+    if (v.versionCode > A.appVersion()) {
+      document.getElementById('updtx').textContent = `Új verzió: ${v.versionName}` + (v.notes ? ' – ' + v.notes : '');
+      document.getElementById('updgo').onclick = () => { A.openUrl(v.apk); updLater(); };
+      document.getElementById('updbar').style.display = 'flex';
+    }
+  } catch (e) {}
+}
+(function () {
+  const A = window.ClaudeApp; if (!A || !A.perms) return;
+  document.getElementById('setupBtn').style.display = '';
+  setTimeout(async () => {
+    const items = await setupItems();
+    if (!localStorage.getItem('ct_setupSeen') && items.some(i => !i.ok)) { localStorage.setItem('ct_setupSeen', '1'); openSetup(); }
+    checkUpdate();
+  }, 1500);
+})();
 </script>
 </body>
 </html>

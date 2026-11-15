@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -18,7 +18,7 @@ const CLAUDE = process.env.CLAUDE_BIN || 'claude';
 const PUB = path.join(__dirname, 'public');
 const CFG_FILE = path.join(HOME, '.claude-tablet.json');
 // A `claude` általában a /usr/local/bin-ben van – legyen mindig a PATH-on (pl. Termuxból indítva).
-for (const d of ['/usr/local/bin', path.join(HOME, '.local', 'bin'), path.join(HOME, '.npm-global', 'bin')])
+for (const d of ['/usr/local/bin', path.join(HOME, '.local', 'bin'), path.join(HOME, '.npm-global', 'bin'), path.join(__dirname, 'bin')])
   if (!(process.env.PATH || '').split(':').includes(d)) process.env.PATH = (process.env.PATH ? process.env.PATH + ':' : '') + d;
 
 // A `claude` futtatható megkeresése (abszolút útvonal vagy PATH). null, ha nincs.
@@ -58,9 +58,9 @@ function json(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
-function readBody(req) {
+function readBody(req, max = 5e6) {
   return new Promise((ok, fail) => {
-    let b = ''; req.on('data', d => { b += d; if (b.length > 5e6) req.destroy(); });
+    let b = ''; req.on('data', d => { b += d; if (b.length > max) req.destroy(); });
     req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { fail(e); } });
   });
 }
@@ -293,7 +293,7 @@ async function bubble(req, res, body) {
     'Válaszolj röviden, magyarul, felolvasásra alkalmasan (kevés markdown, nincs táblázat/kódblokk, hacsak nem kéri). ' +
     (shot ? `A kérés pillanatában készült képernyőkép: ${shot} – ha a kérés a képernyőre vonatkozik, nézd meg Read-dal. ` :
       (body.screen ? 'Képernyőképet most nem sikerült készíteni (ADB nem elérhető). ' : '')) +
-    'A tabletet a `tablet` paranccsal vezérelheted (shot, tap X Y, swipe, type, key, open) – képernyő 2560x1600; csak akkor nyúlj hozzá, ha a felhasználó cselekvést kér.]\n\n';
+    'A tabletet a `tablet` paranccsal vezérelheted: `tablet text` (a képernyő szövegei koordinátákkal – olcsóbb, mint a kép), `tablet clicktext "Felirat"`, tap X Y, swipe, type "szöveg" (ékezet is), key BACK|HOME|ENTER, open app, shot. Csak akkor nyúlj hozzá, ha a felhasználó cselekvést kér.]\n\n';
   const notes = bubbleMemory();
   const log = (cfg.bubbleLog || []).slice(-5);
   const mem = 'Lebegő-gomb memória – jegyzetfájl: ' + BUBBLE_MEM + '. Ha a felhasználó kéri, hogy jegyezz meg valamit, vagy tartós, hasznos tényt/szokást tudsz meg róla, ' +
@@ -314,6 +314,39 @@ async function bubble(req, res, body) {
   };
   if (sid) save(sid);
   send(req, res, { cwd: HOME, sessionId: sid, prompt: pre.replace(/\]\n\n$/, '\n' + mem + ']\n\n') + text, mode: cfg.bubbleMode || 'auto' }, { onSession: save, onEmit });
+}
+
+// ---- Ügynök: az app akadálymentességi szolgáltatása (képernyőkép, koppintás, gépelés ADB nélkül) ----
+// Az app nyitva tart egy GET /api/agent/listen streamet; a parancsok ezen mennek, az eredmény POST /api/agent/result-tal jön vissza.
+let agent = null;
+const agentWait = new Map();
+function agentListen(req, res) {
+  res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+  const me = { emit: o => { try { res.write(JSON.stringify(o) + '\n'); } catch {} } };
+  agent = me; log('ügynök csatlakozott');
+  me.emit({ cmd: 'hello', version: VERSION });
+  const hb = setInterval(() => me.emit({ cmd: 'ping' }), 20000);
+  res.on('close', () => { clearInterval(hb); if (agent === me) { agent = null; log('ügynök lecsatlakozott'); } });
+}
+function agentDo(cmd, timeout = 20000) {
+  return new Promise(ok => {
+    if (!agent) return ok({ ok: false, noAgent: true, error: 'Az app akadálymentességi szolgáltatása nem fut' });
+    const id = crypto.randomBytes(6).toString('hex');
+    const t = setTimeout(() => { agentWait.delete(id); ok({ ok: false, error: 'Az app nem válaszolt időben' }); }, timeout);
+    agentWait.set(id, r => { clearTimeout(t); ok(r); });
+    agent.emit({ ...cmd, id });
+  });
+}
+async function agentHttp(req, res) {
+  const b = await readBody(req);
+  const r = await agentDo(b);
+  if (r.png) {
+    const f = inHome(b.file) || path.join(SHOT_DIR, 'now.png');
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, Buffer.from(r.png, 'base64'));
+    delete r.png; r.file = f;
+  }
+  json(res, r.noAgent ? 503 : 200, r);
 }
 
 // ---- Mappák ----
@@ -420,7 +453,7 @@ const server = http.createServer(async (req, res) => {
     if (!cookieOk) { res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Hiányzó token – nyisd meg a szerver által kiírt linket.'); }
   }
   try {
-    if (u.pathname === '/api/health') return json(res, 200, { ok: true, version: VERSION, pid: process.pid, claude: !!findClaude(), runs: runs.size });
+    if (u.pathname === '/api/health') return json(res, 200, { ok: true, version: VERSION, pid: process.pid, claude: !!findClaude(), login: fs.existsSync(path.join(HOME, '.claude', '.credentials.json')) || !!process.env.ANTHROPIC_API_KEY, runs: runs.size, agent: !!agent });
     if (u.pathname === '/api/projects') return json(res, 200, projects());
     if (u.pathname === '/api/browse') return json(res, 200, browse(u.searchParams.get('path')));
     if (u.pathname === '/api/sessions') return json(res, 200, listSessions(u.searchParams.get('cwd') || HOME));
@@ -443,6 +476,13 @@ const server = http.createServer(async (req, res) => {
       log(`launch ${pkg} -> ${streams.size} kliens`);
       return json(res, 200, { ok: true, pkg, delivered: streams.size });
     }
+    if (u.pathname === '/api/agent/listen') return agentListen(req, res);
+    if (u.pathname === '/api/agent/result' && req.method === 'POST') {
+      const b = await readBody(req, 40e6); const w = agentWait.get(b.id);
+      if (w) { agentWait.delete(b.id); w(b); }
+      return json(res, 200, { ok: !!w });
+    }
+    if (u.pathname === '/api/agent/do' && req.method === 'POST') return agentHttp(req, res);
     if (u.pathname === '/api/bubble' && req.method === 'POST') return bubble(req, res, await readBody(req));
     // a `tablet shot` ezzel rejti el a lebegő gombot a képernyőkép idejére
     if (u.pathname === '/api/overlay' && req.method === 'POST') {

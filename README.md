@@ -49,6 +49,11 @@ Android app (hu.claudetablet)          Termux                         PRoot Ubun
    ADB-n át vezérelhesse a tabletet), egyszer add meg számítógépről:
    `adb shell pm grant hu.claudetablet android.permission.WRITE_SECURE_SETTINGS`
 
+**Tabletvezérlés (opcionális):** Beállítások → Kisegítő lehetőségek → *Claude Tablet – tabletvezérlés*. Ezzel Claude
+a kérésedre képernyőképet készít, kiolvassa a képernyő szövegét, koppint és gépel – ADB nélkül (Android 11+ kell a
+képernyőképhez). Ha a kapcsoló szürke: App-infó → ⋮ → *Korlátozott beállítások engedélyezése*. Az app menüjében lévő
+**Beállítás-ellenőrző** megmutatja, mi hiányzik még.
+
 Csak böngészőből, app nélkül: `./start.sh`, majd `http://127.0.0.1:8765/`.
 
 ## APK build

@@ -269,6 +269,25 @@ public class MainActivity extends Activity {
         if (i != null && i.hasExtra("bubble")) { toggleBubble(i.getBooleanExtra("bubble", true)); i.removeExtra("bubble"); }
     }
 
+    /** az akadálymentességi szolgáltatás bekapcsolása: ha van WRITE_SECURE_SETTINGS, magától; különben a beállítások oldal */
+    void enableAgent() {
+        String me = getPackageName() + "/" + AgentService.class.getName();
+        if (checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED) {
+            try {
+                android.content.ContentResolver cr = getContentResolver();
+                String cur = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+                if (cur == null || !cur.contains(me)) {
+                    Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, cur == null || cur.isEmpty() ? me : cur + ":" + me);
+                    Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+                }
+                toast("Tabletvezérlés bekapcsolva");
+                return;
+            } catch (Exception e) {}
+        }
+        toast("Kapcsold be: Telepített alkalmazások → Claude Tablet – tabletvezérlés");
+        try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); } catch (Exception e) {}
+    }
+
     void toggleBubble(boolean on) {
         if (!on) { if (BubbleService.running) BubbleService.stop(this); else getSharedPreferences("bubble", MODE_PRIVATE).edit().putBoolean("on", false).apply(); return; }
         if (!Settings.canDrawOverlays(this)) {
@@ -781,6 +800,50 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public boolean bubbleOn() { return BubbleService.running; }
+        @JavascriptInterface public int appVersion() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
+        }
+        @JavascriptInterface public String appVersionName() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return ""; }
+        }
+        /** engedélyek állapota a beállítás-ellenőrzőhöz */
+        @JavascriptInterface public String perms() {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("mic", checkSelfPermission(PERM_MIC) == PackageManager.PERMISSION_GRANTED);
+                o.put("notif", Build.VERSION.SDK_INT < 33 || checkSelfPermission(PERM_NOTIF) == PackageManager.PERMISSION_GRANTED);
+                o.put("overlay", Settings.canDrawOverlays(MainActivity.this));
+                o.put("agent", AgentService.enabled());
+                o.put("agentConn", AgentService.connected);
+                o.put("secure", checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED);
+                o.put("voice", SpeechRecognizer.isRecognitionAvailable(MainActivity.this));
+                o.put("sdk", Build.VERSION.SDK_INT);
+            } catch (Exception e) {}
+            return o.toString();
+        }
+        @JavascriptInterface public void requestPerm(final String what) {
+            ui.post(new Runnable() { public void run() {
+                if ("mic".equals(what)) requestPermissions(new String[]{PERM_MIC}, REQ_MIC);
+                else if ("notif".equals(what)) {
+                    if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("app", MODE_PRIVATE).getBoolean("notifAsked", false)) askNotificationPermission();
+                    else try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); } catch (Exception e) {}
+                }
+                else if ("overlay".equals(what)) {
+                    try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()))); } catch (Exception e) {}
+                } else if ("agent".equals(what)) enableAgent();
+                else if ("app".equals(what)) {
+                    try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); } catch (Exception e) {}
+                }
+            } });
+        }
+        @JavascriptInterface public void openUrl(final String url) {
+            ui.post(new Runnable() { public void run() { openExternal(Uri.parse(url)); } });
+        }
+        /** 0 = ki, 1 = be, de nincs kapcsolat a motorral, 2 = működik */
+        @JavascriptInterface public int agentState() { return !AgentService.enabled() ? 0 : AgentService.connected ? 2 : 1; }
+        @JavascriptInterface public void openAgentSettings() {
+            ui.post(new Runnable() { public void run() { enableAgent(); } });
+        }
         @JavascriptInterface public void setBubble(final boolean on) {
             ui.post(new Runnable() { public void run() { toggleBubble(on); } });
         }

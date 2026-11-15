@@ -1,0 +1,78 @@
+#!/bin/bash
+# Tablet vezérlés ADB-n át.  Használat: tablet <parancs> [...]
+#  shot [fájl]        képernyőkép (alap: ~/tablet-shots/now.png)
+#  tap X Y            koppintás (valódi képpontban, 2560x1600)
+#  swipe X1 Y1 X2 Y2 [ms]
+#  type "szöveg"      gépelés (appon át ékezettel is; ADB-vel csak ékezet nélkül)
+#  text               a képernyő szövegei koordinátákkal (appon át)
+#  clicktext "Felirat" rákoppint a feliratra (appon át);  longpress X Y
+#  (először a Claude Tablet app tabletvezérlésén át megy, ADB csak tartalék; CT_ADB=1 = mindig ADB)
+#  key HOME|BACK|ENTER|APP_SWITCH|...
+#  open app|csomag   app indítása (pl. chrome) – nyitott Claude Tablet appnál kép a képben;  apps  telepített appok
+#  connect [port]     újracsatlakozás (port nélkül: automatikus portkeresés)
+#  setup              Claude Tablet app telepítése + auto-hibakeresés és lebegő gomb engedély
+#  bubble on|off      lebegő Claude-gomb be/ki
+# ADB (tartalék) a tablet saját IP-jével: echo 192.168.x.y > ~/.tablet-ip   (nélküle csak az app tabletvezérlése megy)
+IP=$(cat ~/.tablet-ip 2>/dev/null); CFG=~/.tablet-port; PORT=$(cat $CFG 2>/dev/null || echo 5555)
+D="$IP:$PORT"; A="adb -s $D"
+up(){ adb devices | grep -q "^$D\s*device"; }
+# auto-kapcsolódás: mentett port, ha nem megy -> port-pásztázás (az app bekapcsolja a hibakeresést)
+autoconnect(){
+  up && return 0
+  adb connect "$D" 2>&1 | grep -q "connected to" && up && return 0
+  echo "ADB port keresése..." >&2
+  for try in 1 2; do
+    ports=$("$(dirname "$(readlink -f "$0")")/tablet-findport" $IP 30000 50000); [ -z "$ports" ] && ports=$("$(dirname "$(readlink -f "$0")")/tablet-findport" $IP 30000 50000)
+    for p in $ports; do
+      adb connect "$IP:$p" 2>&1 | grep -q "connected to" || continue
+      sleep 1; adb devices | grep -q "^$IP:$p\s*device" || { adb disconnect "$IP:$p" >/dev/null; continue; }
+      echo "$p" > $CFG; D="$IP:$p"; A="adb -s $D"; echo "csatlakozva: $D" >&2; return 0
+    done
+    [ $try = 1 ] && { echo "nincs nyitott ADB port – a Claude Tablet app előtérbe hozása (bekapcsolja)..." >&2
+      am start -n hu.claudetablet/.MainActivity >/dev/null 2>&1; sleep 4; }
+  done
+  echo "Nem sikerült: kapcsold be a Vezeték nélküli hibakeresést (vagy add meg: tablet connect PORT)" >&2; return 1
+}
+ensure(){ [ -z "$IP" ] && { echo "Ehhez ADB kell: kapcsold be az app tabletvezérlését, vagy add meg a tablet IP-jét: echo 192.168.x.y > ~/.tablet-ip" >&2; exit 1; }
+  autoconnect || exit 1; }
+# ügynök (az app akadálymentességi szolgáltatása): ADB nélkül; 0 = kész, 2 = nem elérhető / nem tudja -> ADB
+ag(){ local j r; j=$(python3 -c 'import json,sys; a=sys.argv[1:]; d={"cmd":a[0]}; d.update(dict(zip(a[1::2],a[2::2]))); print(json.dumps(d))' "$@")
+  r=$(curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" http://127.0.0.1:8765/api/agent/do 2>/dev/null) || return 2
+  [ -z "$r" ] && return 2
+  echo "$r" | grep -q '"noAgent":true\|"unsupported":true' && return 2
+  if echo "$r" | grep -q '"ok":true'; then
+    python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("file") or d.get("text") or "ok")' "$r"; return 0; fi
+  python3 -c 'import json,sys; print("hiba:", json.loads(sys.argv[1]).get("error"))' "$r" >&2; return 1; }
+agn(){ ag "$@"; local rc=$?; [ $rc = 2 ] && return 2; exit $rc; }  # ha az ügynök kezelte: kilépés
+case "$1" in
+  connect) if [ -n "$2" ]; then echo "$2" > $CFG; D="$IP:$2"; adb connect "$D"; else autoconnect; fi;;
+  setup) ensure; $A push ~/claude-tablet/android/build/claude-tablet.apk /data/local/tmp/ct.apk >/dev/null && \
+         $A shell pm install -r /data/local/tmp/ct.apk && \
+         $A shell pm grant hu.claudetablet android.permission.WRITE_SECURE_SETTINGS && echo "engedély megadva – a hibakeresést ezentúl az app kapcsolja be"
+         $A shell appops set hu.claudetablet SYSTEM_ALERT_WINDOW allow && echo "lebegő gomb engedély megadva";;
+  shot) f=${2:-~/tablet-shots/now.png}; f=$(realpath -m "$f"); [ -z "$CT_ADB" ] && agn shot file "$f"
+        ensure; mkdir -p "$(dirname "$f")"
+        # a lebegő Claude-gomb/panel ne legyen rajta a képen
+        hid=0; [ -z "$CT_NO_HIDE" ] && curl -s -m 2 -X POST "http://127.0.0.1:8765/api/overlay?show=0" 2>/dev/null | grep -q '"delivered":[1-9]' && { hid=1; sleep 0.4; }
+        $A exec-out screencap -p > "$f"; rc=$?
+        [ $hid = 1 ] && curl -s -m 2 -X POST "http://127.0.0.1:8765/api/overlay?show=1" >/dev/null 2>&1
+        [ $rc = 0 ] && echo "$f";;
+  tap) [ -z "$CT_ADB" ] && agn tap x "$2" y "$3"; ensure; $A shell input tap "$2" "$3";;
+  swipe) [ -z "$CT_ADB" ] && agn swipe x1 "$2" y1 "$3" x2 "$4" y2 "$5" ms "${6:-300}"; ensure; $A shell input swipe "$2" "$3" "$4" "$5" "${6:-300}";;
+  type) [ -z "$CT_ADB" ] && agn type text "$2"; ensure; $A shell input text "$(printf %s "$2" | sed 's/ /%s/g')";;
+  key) [ -z "$CT_ADB" ] && agn key key "$2"; ensure; $A shell input keyevent "KEYCODE_${2^^}";;
+  open) # 1) ha a Claude Tablet app nyitva van: az app kis ablakba ugrik, alá nyílik a kért app
+        r=$(curl -s -m 3 -X POST -H 'Content-Type: application/json' -d "{\"app\":\"$2\"}" http://127.0.0.1:8765/api/launch 2>/dev/null)
+        if echo "$r" | grep -q '"delivered":[1-9]'; then echo "megnyitva az appon át (kép a képben): $2"; exit 0; fi
+        # 2) különben ADB-vel (zárolt tableten nem megy)
+        pkg=$(echo "$r" | sed -n 's/.*"pkg":"\([^"]*\)".*/\1/p'); pkg=${pkg:-$2}
+        [ -z "$CT_ADB" ] && agn open pkg "$pkg"
+        ensure; $A shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 && echo "elindítva ADB-vel: $pkg";;
+  bubble) ensure; v=true; [ "$2" = off ] && v=false
+          $A shell am start -n hu.claudetablet/.MainActivity --ez bubble $v >/dev/null && echo "lebegő gomb: ${2:-on}";;
+  text) agn text; echo "a képernyő szövegéhez a Claude Tablet app tabletvezérlése kell" >&2; exit 1;;
+  clicktext) agn clicktext text "$2"; echo "ehhez a Claude Tablet app tabletvezérlése kell" >&2; exit 1;;
+  longpress) [ -z "$CT_ADB" ] && agn longpress x "$2" y "$3"; ensure; $A shell input swipe "$2" "$3" "$2" "$3" 800;;
+  apps) ensure; $A shell pm list packages -3 | sed 's/package://' | sort;;
+  *) sed -n '2,16p' "$0";;
+esac

@@ -58,6 +58,7 @@ public class BubbleService extends Service {
     static final String ACTION_STOP = "hu.claudetablet.STOP";
     static final String ACTION_TEXT = "hu.claudetablet.TEXT";
     static volatile boolean running = false;
+    static volatile BubbleService inst;
 
     static final int C_BG = 0xff1a1915, C_FG = 0xffece9e1, C_DIM = 0xffa6a39a, C_ACCENT = 0xffd97757,
             C_CARD = 0xff26251f, C_REC = 0xffe05252;
@@ -90,6 +91,7 @@ public class BubbleService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        inst = this;
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         prefs = getSharedPreferences("bubble", MODE_PRIVATE);
     }
@@ -123,6 +125,7 @@ public class BubbleService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        inst = null;
         try { if (bubble != null) wm.removeView(bubble); } catch (Exception e) {}
         try { if (panelShown) wm.removeView(panel); } catch (Exception e) {}
         if (sr != null) sr.destroy();

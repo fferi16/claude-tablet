@@ -1,0 +1,6 @@
+{
+  "versionCode": 9,
+  "versionName": "1.6.0",
+  "apk": "https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk",
+  "notes": "Tabletvezérlés ADB nélkül, beállítás-ellenőrző, frissítés-értesítés"
+}
