@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.9.0",
+  "versionCode": 14,
+  "versionName": "1.10.0",
   "apk": "https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk",
-  "notes": "PC-s beszélgetések a tableten: Menü → ＋ Gép (start-pc a gépen)"
+  "notes": "Biztonsági frissítés: a motort csak ez az app és a saját oldala vezérelheti (más app / weboldal nem). Frissítés után: sh /root/claude-tablet/install.sh"
 }
