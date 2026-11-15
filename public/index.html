@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#1a1915">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<title>Claude Tablet</title>
+<style>
+[hidden]{display:none!important}
+:root{
+  --bg:#1a1915; --panel:#24231f; --panel2:#2d2c27; --line:#3a3933; --text:#ecebe6; --muted:#9d9b92;
+  --accent:#d97757; --accent2:#e8957a; --ok:#7bb37b; --err:#e06c6c; --code:#141310;
+  --r:14px; --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+:root[data-theme=light]{
+  --bg:#f6f4ee; --panel:#fffdf8; --panel2:#efece4; --line:#ddd9cf; --text:#2a2925; --muted:#6f6c63; --code:#f0ede5;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+.app{display:grid;grid-template-columns:320px 1fr;height:100dvh;padding-top:var(--safe-t)}
+/* --- oldalsáv --- */
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 18px;font-weight:650;font-size:19px}
+.brand svg{width:28px;height:28px}
+.sect{padding:6px 14px 4px;color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
+.sect button{font-size:13px;color:var(--accent2);text-transform:none;letter-spacing:0;padding:6px 8px}
+.proj{margin:4px 12px 10px;padding:12px 14px;background:var(--panel2);border-radius:var(--r);display:flex;align-items:center;gap:10px;min-height:52px;width:calc(100% - 24px);text-align:left}
+.proj .p{flex:1;min-width:0}
+.proj b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
+.newbtn{margin:0 12px 10px;padding:13px;border-radius:var(--r);background:var(--accent);color:#fff;font-weight:600;display:flex;gap:8px;justify-content:center;align-items:center}
+.list{flex:1;overflow:auto;padding:0 8px 12px;-webkit-overflow-scrolling:touch}
+.sess{display:block;width:100%;text-align:left;padding:11px 12px;border-radius:12px;margin:2px 0;min-height:48px}
+.sess:active,.sess.on{background:var(--panel2)}
+.sess .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px}
+.sess .d{color:var(--muted);font-size:12.5px}
+.foot{border-top:1px solid var(--line);padding:10px 12px calc(10px + var(--safe-b));display:grid;gap:8px}
+.foot label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+select{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;max-width:190px}
+/* --- fő rész --- */
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);min-height:58px}
+header .ttl{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none}
+.ib:active{background:var(--panel2)}
+.ib svg{width:24px;height:24px}
+#menu{display:none}
+#chat{flex:1;overflow:auto;padding:18px max(16px,calc((100% - 860px)/2)) 30px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+.msg{margin:14px 0;max-width:100%}
+.user{margin-left:auto;width:fit-content;max-width:85%;background:var(--panel2);padding:11px 16px;border-radius:18px 18px 4px 18px;white-space:pre-wrap;word-wrap:break-word}
+.bot{word-wrap:break-word}
+.bot p{margin:.4em 0}.bot h1,.bot h2,.bot h3{font-size:1.1em;margin:.9em 0 .3em}
+.bot ul,.bot ol{padding-left:1.4em;margin:.4em 0}
+.bot code{background:var(--code);padding:1px 6px;border-radius:6px;font:14.5px ui-monospace,Menlo,Consolas,monospace}
+.bot pre{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:12px 14px;overflow-x:auto;position:relative}
+.bot pre code{background:none;padding:0;font-size:14px;line-height:1.5}
+.bot table{border-collapse:collapse;display:block;overflow-x:auto}.bot td,.bot th{border:1px solid var(--line);padding:5px 9px}
+.copy{position:absolute;top:6px;right:6px;font-size:12px;padding:5px 9px;border-radius:8px;background:var(--panel2);color:var(--muted)}
+.tool{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:8px 0;overflow:hidden}
+.tool summary{list-style:none;padding:10px 14px;display:flex;gap:10px;align-items:center;min-height:46px;cursor:pointer}
+.tool summary::-webkit-details-marker{display:none}
+.tool .nm{font-weight:600;font-size:14px;color:var(--accent2);flex:none}
+.tool .ar{font:13.5px ui-monospace,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.tool .st{flex:none;width:10px;height:10px;border-radius:50%;background:var(--muted);animation:pulse 1s infinite}
+.tool.ok .st{background:var(--ok);animation:none}.tool.bad .st{background:var(--err);animation:none}
+.tool pre{margin:0;padding:10px 14px;border-top:1px solid var(--line);background:var(--code);font:13px/1.45 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto}
+.meta{color:var(--muted);font-size:13px;text-align:center;margin:6px 0 18px}
+.err{color:var(--err);background:color-mix(in srgb,var(--err) 12%,transparent);padding:10px 14px;border-radius:12px;white-space:pre-wrap;font-size:14px}
+.typing{display:flex;gap:5px;padding:8px 2px}.typing i{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+.empty{height:100%;display:grid;place-content:center;text-align:center;color:var(--muted);gap:10px;padding:20px}
+.empty svg{width:64px;height:64px;margin:auto}
+.empty h2{color:var(--text);margin:0;font-weight:600}
+/* --- beviteli sáv --- */
+.composer{padding:8px max(12px,calc((100% - 884px)/2)) calc(10px + var(--safe-b));border-top:1px solid var(--line);background:var(--bg)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--panel2);font-size:14.5px;min-height:38px;white-space:nowrap}
+.chip:active{background:var(--line)}
+.box{display:flex;align-items:flex-end;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:6px 6px 6px 16px}
+.box:focus-within{border-color:var(--accent)}
+textarea{flex:1;resize:none;border:0;outline:0;background:none;color:var(--text);font:inherit;max-height:40vh;padding:9px 0;min-height:44px}
+.send{width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.mic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--muted);transition:box-shadow .09s}
+.mic svg{width:24px;height:24px}
+.mic:active{background:var(--panel2)}
+.mic.on{background:var(--err);color:#fff}
+.vtoast{position:fixed;left:50%;bottom:calc(120px + var(--safe-b));transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14.5px;z-index:40;max-width:90vw;box-shadow:0 6px 24px #0006}
+.send:disabled{opacity:.35}
+.send.stop{background:var(--err)}
+.send svg{width:22px;height:22px}
+/* --- mappaválasztó --- */
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:0;width:min(560px,94vw);max-height:84dvh}
+dialog::backdrop{background:#0008}
+.dh{display:flex;align-items:center;gap:6px;padding:12px;border-bottom:1px solid var(--line)}
+.dh .path{flex:1;font:14px ui-monospace,monospace;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.dl{overflow:auto;max-height:56dvh;padding:6px}
+.dl button{display:flex;width:100%;text-align:left;gap:10px;align-items:center;padding:12px;border-radius:10px;min-height:48px}
+.dl button:active{background:var(--panel2)}
+.df{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.df button{flex:1;padding:13px;border-radius:12px;background:var(--panel2);font-weight:600}
+.df .pri{background:var(--accent);color:#fff}
+.scrim{display:none}
+.banner{position:fixed;top:calc(var(--safe-t) + 10px);left:50%;transform:translateX(-50%);z-index:50;background:var(--accent);color:#fff;padding:10px 18px;border-radius:999px;font-size:15px;font-weight:600;box-shadow:0 6px 24px #0007;display:flex;gap:10px;align-items:center;max-width:92vw}
+.banner i{width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1s infinite;flex:none}
+.bot blockquote{margin:.5em 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--muted)}
+.bot hr{border:0;border-top:1px solid var(--line);margin:1em 0}
+/* --- csatolmányok --- */
+.plus{width:44px;height:44px;margin:2px 0;color:var(--muted)}
+.plus.on{color:var(--accent2);background:var(--panel2)}
+.box{padding-left:6px}
+.attmenu{position:absolute;bottom:calc(100% + 8px);left:0;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px #0008;padding:6px;z-index:30;min-width:230px}
+.attmenu button{display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:12px 14px;border-radius:10px;min-height:48px;font-size:16px}
+.attmenu button:active{background:var(--panel2)}
+.attmenu .em{font-size:20px;width:26px;text-align:center}
+.boxwrap{position:relative}
+.tray{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.att{flex:none;position:relative;width:76px;height:76px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);overflow:hidden;display:grid;place-items:center;text-align:center;font-size:11px;color:var(--muted)}
+.att img{width:100%;height:100%;object-fit:cover}
+.att .fn{padding:4px;word-break:break-all;line-height:1.2;max-height:100%;overflow:hidden}
+.att .fn b{display:block;font-size:22px}
+.att .x{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:#000a;color:#fff;font-size:14px;display:grid;place-items:center}
+.att.up::after{content:'';position:absolute;inset:0;background:#0007 linear-gradient(90deg,transparent,#fff3,transparent);background-size:200% 100%;animation:shim 1s infinite linear}
+.att.err{border-color:var(--err)}.att.err::before{content:'⚠';position:absolute;bottom:3px;left:5px;color:var(--err);font-size:16px}
+@keyframes shim{from{background-position:200% 0}to{background-position:-200% 0}}
+.uatts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:flex-end}
+.uatts img{width:110px;height:110px;object-fit:cover;border-radius:10px;cursor:pointer;background:var(--bg)}
+.uatts .fc{background:var(--bg);border-radius:10px;padding:6px 10px;font-size:13.5px;cursor:pointer;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool img.ti{display:block;max-width:100%;max-height:260px;margin:0 auto;padding:8px}
+.dropping .composer{outline:2px dashed var(--accent);outline-offset:-6px}
+/* --- fájltallózó --- */
+#fb{width:min(760px,96vw);max-height:90dvh}
+#fb .dl{max-height:66dvh}
+.fe{display:flex;width:100%;text-align:left;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;min-height:50px}
+.fe:active{background:var(--panel2)}
+.fe .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fe small{color:var(--muted);font-size:12.5px;flex:none}
+.fv{padding:10px;overflow:auto;max-height:62dvh}
+.fv img{display:block;max-width:100%;max-height:60dvh;margin:auto;border-radius:8px}
+.fv pre{margin:0;background:var(--code);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:13px/1.45 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word}
+.fv iframe{width:100%;height:60dvh;border:0;background:#fff;border-radius:8px}
+.toast{white-space:pre-line;text-align:center;position:fixed;bottom:calc(110px + var(--safe-b));left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:60;font-size:15px;box-shadow:0 6px 24px #0007}
+/* --- oldalsó csíkok: bal = 5 órás limit, jobb = kontextus --- */
+.app{padding-left:7px;padding-right:7px}
+.rail{position:fixed;top:calc(var(--safe-t) + 6px);bottom:calc(var(--safe-b) + 6px);width:7px;z-index:15;display:flex;justify-content:center;cursor:pointer}
+.rail.l{left:0}.rail.r{right:0}
+.rail .tr{width:4px;height:100%;border-radius:2px;background:color-mix(in srgb,var(--line) 70%,transparent);position:relative;overflow:hidden}
+.rail .fl{position:absolute;left:0;right:0;bottom:0;height:0;border-radius:2px;background:var(--ok);transition:height .5s,background .5s}
+.rail.none .fl{height:0!important}
+/* --- alsó sáv: modell + állapot --- */
+.cbar{display:flex;align-items:center;gap:8px;padding:6px 4px 0;font-size:13px;color:var(--muted)}
+.cbar select{min-height:34px;padding:4px 8px;font-size:14px;border-radius:999px;max-width:230px;background:var(--panel)}
+.cbar .stat{margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+/* --- keskeny / álló tablet --- */
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  aside{position:fixed;inset:0 auto 0 0;width:min(340px,88vw);z-index:20;transform:translateX(-102%);transition:transform .22s;padding-top:var(--safe-t)}
+  .app.open aside{transform:none;box-shadow:0 0 40px #0009}
+  .app.open .scrim{display:block;position:fixed;inset:0;background:#0006;z-index:10}
+  #menu{display:grid}
+}
+/* --- kép a képben (PiP): csak a beszélgetés látszik, kicsiben --- */
+body.pip aside,body.pip header,body.pip .composer,body.pip .cbar,body.pip .rail,body.pip .scrim,body.pip .meta,body.pip .tool{display:none!important}
+body.pip .app{grid-template-columns:1fr!important}
+body.pip{font-size:12px}
+body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin:4px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="scrim" onclick="drawer(false)"></div>
+  <aside>
+    <div class="brand"><svg viewBox="0 0 24 24" fill="#d97757"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/><circle cx="19" cy="19" r="2"/></svg>Claude Tablet</div>
+    <div class="sect">Projekt</div>
+    <button class="proj" onclick="openPicker()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span class="p"><b id="pname">—</b><small id="ppath"></small></span>
+      <span style="color:var(--muted)">▾</span>
+    </button>
+    <button class="newbtn" onclick="newChat()">＋ Új beszélgetés</button>
+    <div class="sect">Korábbi beszélgetések <button onclick="loadSessions()">↻</button></div>
+    <div class="list" id="sessions"></div>
+    <div class="foot">
+      <label>Engedélyek
+        <select id="mode">
+          <option value="auto">Automatikus (ajánlott)</option>
+          <option value="acceptEdits">Szerkesztés OK</option>
+          <option value="plan">Csak tervez</option>
+          <option value="bypassPermissions">Mindent szabad ⚠</option>
+          <option value="dontAsk">Csak engedélyezett</option>
+        </select></label>
+      <button class="chip" style="text-align:center" onclick="restartEngine()">↻ Motor újraindítása</button>
+      <label>Diktálás után
+        <select id="vsend"><option value="0">Javíthatom</option><option value="1">Azonnal küldi</option></select></label>
+      <label>Válasz felolvasása
+        <select id="tts"><option value="0">Ki</option><option value="1">Be</option></select></label>
+      <label id="bubbleRow" style="display:none">Lebegő Claude-gomb
+        <select id="bubble" onchange="ClaudeApp.setBubble(this.value==='1');setTimeout(syncBubble,1500)"><option value="0">Ki</option><option value="1">Be</option></select></label>
+      <label id="bubbleRow" style="display:none">Lebegő Claude-gomb
+        <select id="bubbleSel" onchange="window.ClaudeApp&&ClaudeApp.setBubble(this.value==='1')"><option value="0">Ki</option><option value="1">Be</option></select></label>
+      <label>Téma
+        <select id="theme"><option value="dark">Sötét</option><option value="light">Világos</option></select></label>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <button class="ib" id="menu" onclick="drawer(true)" aria-label="Menü"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="ttl" id="title">Új beszélgetés</div>
+      <button class="ib" onclick="openFiles()" aria-label="Fájlok" title="Fájlok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></button>
+      <button class="ib" onclick="newChat()" aria-label="Új"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    </header>
+    <div id="chat"></div>
+    <div class="composer">
+      <div class="chips" id="chips"></div>
+      <div class="tray" id="tray" hidden></div>
+      <div class="boxwrap">
+      <div class="attmenu" id="attmenu" hidden>
+        <button onclick="pickLocal('image/*')"><span class="em">🖼️</span>Kép / fénykép</button>
+        <button onclick="pickLocal('*/*')"><span class="em">📎</span>Fájl a telefonról</button>
+        <button onclick="attMenu(false);openFiles(true)"><span class="em">📂</span>Tallózás a projektben</button>
+        <button onclick="pasteClip()"><span class="em">📋</span>Beillesztés vágólapról</button>
+      </div>
+      <div class="box">
+        <button class="ib plus" id="plus" onclick="attMenu()" aria-label="Csatolás" title="Csatolás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9.2-9.2a3.7 3.7 0 015.2 5.2l-9.2 9.2a1.8 1.8 0 01-2.6-2.6l8.5-8.5"/></svg></button>
+        <textarea id="input" rows="1" placeholder="Írj Claude-nak…" enterkeyhint="send"></textarea>
+        <button class="mic" id="mic" onclick="micToggle()" aria-label="Diktálás" title="Diktálás" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
+        <button class="send" id="send" onclick="onSend()" aria-label="Küldés"></button>
+      </div>
+      </div>
+      <div class="cbar">
+        <select id="model" aria-label="Modell">
+          <option value="">Alapértelmezett</option>
+          <option value="claude-opus-5-5">Opus 5.5</option>
+          <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+          <option value="claude-haiku-5-5">Haiku 5.5</option>
+          <option value="claude-fable-5-1">Fable 5.1</option>
+        </select>
+        <span class="stat" id="stat" onclick="railInfo()"></span>
+      </div>
+      <input type="file" id="fpick" hidden multiple>
+    </div>
+  </main>
+</div>
+
+<div class="rail l none" id="railL" onclick="railInfo('l')" title="5 órás limit"><div class="tr"><div class="fl"></div></div></div>
+<div class="rail r none" id="railR" onclick="railInfo('r')" title="Kontextus"><div class="tr"><div class="fl"></div></div></div>
+<div class="banner" id="banner" hidden><i></i><span>A motor nem fut – újracsatlakozás…</span></div>
+
+<dialog id="picker">
+  <div class="dh">
+    <button class="ib" onclick="browse(pick.parent)" aria-label="Fel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="path" id="pickpath"></div>
+    <button class="ib" onclick="mkdirHere()" aria-label="Új mappa" title="Új mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+  </div>
+  <div class="dl" id="picklist"></div>
+  <div class="df" id="newdir" hidden>
+    <input id="newname" placeholder="Új mappa neve" style="flex:2;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text)">
+    <button class="pri" onclick="mkdirConfirm()">Létrehoz</button>
+  </div>
+  <div class="df">
+    <button onclick="picker.close()">Mégse</button>
+    <button class="pri" onclick="choose(pick.path)">Ezt választom</button>
+  </div>
+</dialog>
+
+<dialog id="fb">
+  <div class="dh">
+    <button class="ib" onclick="fbBack()" aria-label="Vissza"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="path" id="fbpath"></div>
+    <button class="ib" id="fbhid" onclick="fbToggleHidden()" title="Rejtett fájlok" aria-label="Rejtett fájlok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="ib" onclick="fb.close()" aria-label="Bezár"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="dl" id="fblist"></div>
+  <div class="fv" id="fbview" hidden></div>
+  <div class="df" id="fbact" hidden>
+    <button onclick="fbInsertPath()">Útvonal a szövegbe</button>
+    <button class="pri" onclick="fbAttach()">📎 Csatolás</button>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const chat = $('#chat'), input = $('#input'), sendBtn = $('#send');
+const ICON_SEND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>';
+const ICON_STOP = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+const store = { get(k, d) { try { const v = localStorage.getItem('ct_' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+                set(k, v) { try { localStorage.setItem('ct_' + k, JSON.stringify(v)); } catch {} } };
+
+let state = { cwd: store.get('cwd', null), session: null, runId: null, busy: false };
+const tools = {}; // tool_use_id -> DOM
+let pick = {};
+
+const CHIPS = [
+  ['Folytasd', 'Folytasd.'],
+  ['Mit csinál ez a projekt?', 'Nézd át ezt a projektet és foglald össze röviden, mit csinál és hogyan épül fel.'],
+  ['Hibakeresés', 'Keresd meg és javítsd a hibát: '],
+  ['Tesztek futtatása', 'Futtasd a teszteket, és ha valami elbukik, javítsd.'],
+  ['Git állapot', 'Mutasd a git állapotot és a legutóbbi változásokat röviden.'],
+  ['Commit', 'Készíts egy commitot a jelenlegi változásokról, értelmes üzenettel.'],
+  ['Magyarázd el', 'Magyarázd el egyszerűen: '],
+];
+
+// ---------- segédek ----------
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function md(src) {
+  const blocks = [], codes = [];
+  // kódblokkok (nyelvjelölés bármilyen lehet: c++, jsonc, shell-session…; lezáratlan blokk streamelés közben is)
+  src = String(src || '').replace(/```[^\n`]*\n?([\s\S]*?)(?:```|$)/g, (_, c) => { blocks.push(c.replace(/\n$/, '')); return `\u0000B${blocks.length - 1}\u0000`; });
+  let h = esc(src);
+  // inline kód előbb félre, hogy a benne lévő * ne legyen formázás
+  h = h.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000C${codes.length - 1}\u0000`; });
+  h = h.replace(/\*\*(?=\S)([^*\n]+?)\*\*/g, '<b>$1</b>')
+       .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![*\w])/gm, '$1<i>$2</i>')
+       .replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+       .replace(/\u0000C(\d+)\u0000/g, (_, n) => `<code>${codes[n]}</code>`);
+  const out = []; let list = null;
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const lines = h.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    // táblázat
+    if (/^\s*\|.*\|\s*$/.test(l) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || '')) {
+      close();
+      const row = (r, t) => '<tr>' + r.trim().replace(/^\||\|$/g, '').split('|').map(c => `<${t}>${c.trim()}</${t}>`).join('') + '</tr>';
+      let t = '<table>' + row(l, 'th'); i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) t += row(lines[i++], 'td');
+      i--; out.push(t + '</table>'); continue;
+    }
+    let m;
+    if ((m = l.match(/^\s*(?:[-*+•]|\d+[.)]) (.*)/)) && !/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) {
+      const t = /^\s*\d/.test(l) ? 'ol' : 'ul';
+      if (list !== t) { close(); out.push(`<${t}>`); list = t; }
+      out.push(`<li>${m[1]}</li>`); continue;
+    }
+    close();
+    if ((m = l.match(/^(#{1,6}) (.*)/))) { const n = Math.min(3, m[1].length); out.push(`<h${n}>${m[2]}</h${n}>`); }
+    else if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) out.push('<hr>');
+    else if ((m = l.match(/^\s*&gt; ?(.*)/))) out.push(`<blockquote>${m[1]}</blockquote>`);
+    else if (/^\u0000B\d+\u0000$/.test(l.trim())) out.push(l.trim());
+    else if (l.trim()) l.split(/(\u0000B\d+\u0000)/).forEach(x => { if (/^\u0000B/.test(x)) out.push(x); else if (x.trim()) out.push(`<p>${x}</p>`); });
+  }
+  close();
+  return out.join('').replace(/\u0000B(\d+)\u0000/g, (_, n) =>
+    `<pre><button class="copy" onclick="copyCode(this)">Másol</button><code>${esc(blocks[n])}</code></pre>`);
+}
+function copyCode(b) {
+  const t = b.nextElementSibling.textContent;
+  (navigator.clipboard?.writeText(t) || Promise.reject()).then(() => { b.textContent = 'Kész ✓'; setTimeout(() => b.textContent = 'Másol', 1500); }).catch(() => {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); b.textContent = 'Kész ✓';
+  });
+}
+function nearBottom() { return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160; }
+function scrollDown(force) { if (force || nearBottom()) chat.scrollTop = chat.scrollHeight; }
+function add(html, cls) { const d = document.createElement('div'); d.className = 'msg ' + (cls || ''); d.innerHTML = html; chat.append(d); return d; }
+function base(p) { return p ? p.split('/').filter(Boolean).pop() || '/' : '—'; }
+function ago(ms) {
+  const s = (Date.now() - ms) / 1000;
+  if (s < 60) return 'most'; if (s < 3600) return Math.floor(s / 60) + ' perce'; if (s < 86400) return Math.floor(s / 3600) + ' órája';
+  return new Date(ms).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+}
+function toolArg(name, inp = {}) {
+  return inp.command || inp.file_path || inp.path || inp.pattern || inp.url || inp.query || inp.description || inp.prompt || JSON.stringify(inp);
+}
+const TOOL_HU = { Bash: 'Parancs', Read: 'Olvasás', Edit: 'Szerkesztés', Write: 'Írás', Grep: 'Keresés', Glob: 'Fájlkeresés', WebFetch: 'Weblap', WebSearch: 'Webkeresés', Task: 'Al-ügynök', Agent: 'Al-ügynök', TodoWrite: 'Teendők' };
+
+// ---------- megjelenítés ----------
+function renderEvent(e, live) {
+  if (e.kind === 'ctx') setCtx(e.tokens, e.window, e.model);
+  else if (e.kind === 'user') renderUser(e.text);
+  else if (e.kind === 'text') add(md(e.text), 'bot');
+  else if (e.kind === 'tool') {
+    let detail = '';
+    if (e.name === 'Edit' && e.input) detail = `--- régi\n${e.input.old_string || ''}\n+++ új\n${e.input.new_string || ''}`;
+    else if (e.name === 'Write' && e.input) detail = (e.input.content || '').slice(0, 4000);
+    else if (e.name === 'Read' && isImgName(e.input?.file_path || '')) detail = '\u0000IMG';
+    else if (e.name === 'TodoWrite' && e.input?.todos) detail = e.input.todos.map(t => (t.status === 'completed' ? '☑ ' : t.status === 'in_progress' ? '▶ ' : '☐ ') + t.content).join('\n');
+    const d = document.createElement('details'); d.className = 'tool' + (live ? '' : ' ok');
+    d.innerHTML = `<summary><span class="st"></span><span class="nm">${esc(TOOL_HU[e.name] || e.name)}</span><span class="ar">${esc(toolArg(e.name, e.input))}</span></summary>` +
+      (detail === '\u0000IMG' ? `<img class="ti" loading="lazy" src="${fileUrl(e.input.file_path)}" onerror="this.remove()">` : detail ? `<pre>${esc(detail)}</pre>` : '');
+    const w = add('', ''); w.append(d); tools[e.id] = d;
+  } else if (e.kind === 'result') {
+    const d = tools[e.id]; if (!d) return;
+    d.classList.add(e.isError ? 'bad' : 'ok');
+    if (e.content) { const p = document.createElement('pre'); p.textContent = e.content.length > 6000 ? e.content.slice(0, 6000) + '\n…' : e.content; d.append(p); }
+    if (e.isError) d.open = true;
+  }
+}
+
+function empty() {
+  chat.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="#d97757"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>
+    <h2>Miben segíthetek?</h2><div>Projekt: <b>${esc(base(state.cwd))}</b></div></div>`;
+}
+
+// ---------- adatok ----------
+// --- motor elérhetősége: ha a szerver újraindul, banner + várakozás, amíg a /api/health válaszol ---
+let waiting = null;
+function isNetErr(err) { return err instanceof TypeError || err?.name === 'NetErr'; }
+function waitForServer() {
+  if (waiting) return waiting;
+  $('#banner').hidden = false;
+  waiting = new Promise(ok => {
+    const tick = async () => {
+      try { const r = await fetch('/api/health', { cache: 'no-store' }); if (r.ok && (await r.json()).ok) return ok(); } catch {}
+      setTimeout(tick, 2000);
+    };
+    setTimeout(tick, 1000);
+  }).then(() => { $('#banner').hidden = true; waiting = null; onReconnect(); });
+  return waiting;
+}
+async function onReconnect() {
+  try {
+    if (!state.cwd) { const p = await api('/api/projects'); setProject(p.recent[0] || p.home); }
+    else loadSessions();
+  } catch {}
+}
+async function api(p, body) {
+  for (;;) {
+    let r;
+    try { r = await fetch(p, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }); }
+    catch (err) { if (!isNetErr(err)) throw err; await waitForServer(); continue; }
+    if (r.status === 502 || r.status === 503 && !r.headers.get('content-type')?.includes('json')) { await waitForServer(); continue; }
+    return r.json();
+  }
+}
+// --- Android app (WebView) híd: értesítés + rezgés, ha elérhető ---
+function nativeNotify(title, text) {
+  try { if (window.ClaudeApp) { ClaudeApp.notify(title, text); ClaudeApp.vibrate(); } } catch {}
+}
+function plain(t) { return String(t || '').replace(/```[\s\S]*?(```|$)/g, ' ').replace(/[`*#>|_\[\]]/g, '').replace(/\s+/g, ' ').trim(); }
+async function loadSessions() {
+  const el = $('#sessions');
+  if (!state.cwd) return;
+  let list = await api('/api/sessions?cwd=' + encodeURIComponent(state.cwd));
+  if (!Array.isArray(list)) list = [];
+  el.innerHTML = list.length ? '' : '<div style="color:var(--muted);padding:12px;font-size:14px">Még nincs beszélgetés ebben a projektben.</div>';
+  for (const s of list) {
+    const b = document.createElement('button'); b.className = 'sess' + (s.id === state.session ? ' on' : '');
+    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)} · ${s.count} üzenet</div>`;
+    b.onclick = () => openSession(s.id, s.title);
+    el.append(b);
+  }
+}
+async function openSession(id, title) {
+  if (state.busy) return;
+  state.session = id; drawer(false);
+  $('#title').textContent = title || 'Beszélgetés';
+  chat.innerHTML = '<div class="typing"><i></i><i></i><i></i></div>';
+  let h = await api(`/api/history?cwd=${encodeURIComponent(state.cwd)}&id=${id}`);
+  if (!Array.isArray(h)) h = [];
+  chat.innerHTML = '';
+  for (const k in tools) delete tools[k];
+  setCtx(0);
+  h.forEach(e => renderEvent(e, false));
+  if (!h.length) empty();
+  chat.style.scrollBehavior = 'auto'; scrollDown(true); chat.style.scrollBehavior = '';
+  loadSessions();
+}
+function newChat() {
+  if (state.busy) return;
+  state.session = null; $('#title').textContent = 'Új beszélgetés'; setCtx(0);
+  for (const k in tools) delete tools[k];
+  empty(); drawer(false); loadSessions(); input.focus();
+}
+function setProject(p) {
+  if (state.cwd !== p) { atts = []; renderTray(); }
+  state.cwd = p; store.set('cwd', p);
+  $('#pname').textContent = base(p); $('#ppath').textContent = p;
+  newChat();
+}
+
+// ---------- küldés + stream ----------
+async function onSend() {
+  if (state.busy) return stop();
+  const typed = input.value.trim();
+  if ((!typed && !atts.length) || !state.cwd) return;
+  if (atts.some(a => a.status === 'up')) return toast('Várj, még tart a feltöltés…');
+  const sent = atts.filter(a => a.status === 'ok');
+  const text = (typed || 'Nézd meg a csatolt fájlokat.') + (sent.length ? `\n\n${ATT_HDR}\n` + sent.map(a => '- ' + a.path).join('\n') : '');
+  const savedAtts = atts; atts = []; renderTray();
+  input.value = ''; autosize();
+  if (chat.querySelector('.empty')) chat.innerHTML = '';
+  if (!state.session) $('#title').textContent = (typed || sent.map(a => a.name).join(', ')).slice(0, 60);
+  renderUser(text); scrollDown(true);
+  setBusy(true);
+  let bubble = null, buf = '', lastText = '', raf = 0, notified = false;
+  const typing = add('<div class="typing"><i></i><i></i><i></i></div>');
+  const moveTyping = () => chat.append(typing);
+  // streamelt szöveg kirajzolása legfeljebb képkockánként egyszer (hosszú válasznál ne akadjon)
+  const paint = () => { raf = 0; if (bubble) { bubble.innerHTML = md(buf); moveTyping(); scrollDown(); } };
+  const flush = () => { if (raf) { cancelAnimationFrame(raf); paint(); } };
+  const handle = e => {
+    if (e.kind === 'run') state.runId = e.runId;
+    else if (e.kind === 'session') { state.session = e.id; if (e.model) setDefaultModel(e.model); }
+    else if (e.kind === 'ctx') { setCtx(e.tokens, null, e.model); return; }
+    else if (e.kind === 'ctxwin') { const w = store.get('ctxwin', {}); w[e.model] = e.window; store.set('ctxwin', w); setCtx(ctx.tokens, e.window, e.model); return; }
+    else if (e.kind === 'delta') {
+      if (!bubble) { bubble = add('', 'bot'); buf = ''; }
+      buf += e.text; lastText = buf;
+      if (!raf) raf = requestAnimationFrame(paint);
+      return;
+    } else if (e.kind === 'text') {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (bubble) { bubble.innerHTML = md(e.text); bubble = null; } else add(md(e.text), 'bot');
+      buf = ''; lastText = e.text; moveTyping();
+    } else if (e.kind === 'launch') { launchApp(e.pkg, e.label); return; }
+    else if (e.kind === 'tool') { flush(); bubble = null; renderEvent(e, true); moveTyping(); }
+    else if (e.kind === 'result') renderEvent(e, true);
+    else if (e.kind === 'done') {
+      flush();
+      const parts = [];
+      if (e.ms) parts.push((e.ms / 1000).toFixed(1) + ' mp');
+      if (typeof e.cost === 'number' && e.cost) parts.push('$' + e.cost.toFixed(3));
+      if (parts.length) add(parts.join(' · '), 'meta');
+      loadUsage(true);
+      if (!notified) {
+        notified = true;
+        const sum = plain(lastText).slice(0, 100);
+        if (e.isError) nativeNotify('Claude hiba', sum || 'A futás hibával ért véget');
+        else { nativeNotify('Claude kész', sum || 'Válasz elkészült'); speakReply(lastText); }
+      }
+    } else if (e.kind === 'error') {
+      flush(); add(esc(e.text), 'err');
+      if (!notified) { notified = true; nativeNotify('Claude hiba', plain(e.text).slice(0, 100) || 'Hiba történt'); }
+    }
+    scrollDown();
+  };
+  const parse = line => { if (!line.trim()) return; let e; try { e = JSON.parse(line); } catch { return; } handle(e); };
+  try {
+    let r;
+    try {
+      r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: state.cwd, sessionId: state.session, prompt: text, mode: $('#mode').value, model: $('#model').value }) });
+    } catch (err) { if (isNetErr(err)) { input.value = typed; atts = savedAtts; renderTray(); autosize(); waitForServer(); throw new Error('A motor nem érhető el – az üzenet visszakerült a beviteli mezőbe.'); } throw err; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText || ('HTTP ' + r.status)); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let rest = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        rest += dec.decode(value, { stream: true });
+        let i;
+        while ((i = rest.indexOf('\n')) >= 0) { const line = rest.slice(0, i); rest = rest.slice(i + 1); parse(line); }
+      }
+      parse(rest + dec.decode());
+    } catch (err) {
+      if (isNetErr(err)) { waitForServer(); throw new Error('Megszakadt a kapcsolat a motorral.'); }
+      throw err;
+    }
+  } catch (err) {
+    flush(); add(esc('Hiba: ' + err.message), 'err');
+    if (!notified) { notified = true; nativeNotify('Claude hiba', err.message.slice(0, 100)); }
+  }
+  flush();
+  typing.remove();
+  chat.querySelectorAll('.tool:not(.ok):not(.bad)').forEach(d => d.classList.add('ok'));
+  setBusy(false); scrollDown(); loadSessions().catch(() => {});
+}
+async function stop() { if (state.runId) { try { await api('/api/stop', { runId: state.runId }); } catch {} } }
+function setBusy(b) {
+  state.busy = b; if (!b) state.runId = null;
+  sendBtn.innerHTML = b ? ICON_STOP : ICON_SEND; sendBtn.classList.toggle('stop', b);
+  sendBtn.setAttribute('aria-label', b ? 'Leállítás' : 'Küldés');
+  sendBtn.disabled = !b && !input.value.trim() && !atts.length; // futás közben a Leállítás gomb mindig nyomható
+}
+
+// ---------- mappaválasztó ----------
+const picker = $('#picker');
+async function openPicker() {
+  const p = await api('/api/projects');
+  const el = $('#picklist');
+  $('#pickpath').textContent = 'Válassz projektet'; pick = { path: state.cwd || p.home, parent: p.home };
+  el.innerHTML = '';
+  const sec = t => { const d = document.createElement('div'); d.className = 'sect'; d.textContent = t; el.append(d); };
+  const row = (path, sub) => { const b = document.createElement('button'); b.innerHTML = `📁 <span><b>${esc(base(path))}</b><br><small style="color:var(--muted)">${esc(sub || path)}</small></span>`; b.onclick = () => choose(path); el.append(b); };
+  if (p.recent.length) { sec('Legutóbbiak'); p.recent.forEach(x => row(x)); }
+  sec('Saját mappa'); p.dirs.forEach(x => row(x));
+  const b = document.createElement('button'); b.innerHTML = '🔎 <b>Tallózás…</b>'; b.onclick = () => browse(state.cwd || p.home); el.append(b);
+  $('#newdir').hidden = true;
+  picker.showModal();
+}
+async function browse(path) {
+  const r = await api('/api/browse?path=' + encodeURIComponent(path || ''));
+  if (r.error) return;
+  pick = r; $('#pickpath').textContent = r.path;
+  const el = $('#picklist'); el.innerHTML = '';
+  if (!r.entries.length) el.innerHTML = '<div style="padding:14px;color:var(--muted)">Nincs almappa.</div>';
+  r.entries.forEach(n => { const b = document.createElement('button'); b.innerHTML = '📁 ' + esc(n); b.onclick = () => browse(r.path.replace(/\/$/, '') + '/' + n); el.append(b); });
+}
+function mkdirHere() { if (!pick.entries) browse(pick.path); $('#newdir').hidden = false; $('#newname').focus(); }
+async function mkdirConfirm() {
+  const n = $('#newname').value.trim(); if (!n || n.includes('/')) return;
+  const r = await api('/api/mkdir', { path: pick.path.replace(/\/$/, '') + '/' + n });
+  if (r.path) { $('#newname').value = ''; $('#newdir').hidden = true; choose(r.path); }
+}
+function choose(p) { picker.close(); setProject(p); }
+
+// ---------- csatolmányok ----------
+const ATT_HDR = '[Csatolt fájlok – olvasd be őket a Read eszközzel]';
+let atts = []; // {name, path, url, isImg, status: 'up'|'ok'|'err', err}
+function isImgName(n) { return /\.(png|jpe?g|gif|webp|bmp|heic|svg)$/i.test(n); }
+function fileUrl(p) { return '/api/file?path=' + encodeURIComponent(p); }
+function fsize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+function splitAtt(text) {
+  const i = text.indexOf(ATT_HDR);
+  if (i < 0) return { body: text, paths: [] };
+  const paths = text.slice(i + ATT_HDR.length).split('\n').map(l => l.match(/^- (.+)$/)?.[1]).filter(Boolean);
+  return { body: text.slice(0, i).trim(), paths };
+}
+function renderUser(text) {
+  const { body, paths } = splitAtt(text);
+  const d = add(esc(body), 'user');
+  if (paths.length) {
+    const w = document.createElement('div'); w.className = 'uatts';
+    for (const p of paths) {
+      let el;
+      if (isImgName(p)) { el = document.createElement('img'); el.loading = 'lazy'; el.src = fileUrl(p); el.alt = base(p); }
+      else { el = document.createElement('span'); el.className = 'fc'; el.textContent = '📄 ' + base(p).replace(/^\d{14}-[0-9a-f]{4}-/, ''); }
+      el.onclick = () => openFiles(false, p);
+      w.append(el);
+    }
+    d.append(w);
+  }
+  return d;
+}
+function renderTray() {
+  const t = $('#tray'); t.hidden = !atts.length; t.innerHTML = '';
+  atts.forEach((a, i) => {
+    const d = document.createElement('div'); d.className = 'att ' + (a.status === 'ok' ? '' : a.status); d.title = a.err || a.name;
+    d.innerHTML = a.isImg && a.url ? `<img src="${esc(a.url)}">` : `<div class="fn"><b>📄</b>${esc(a.name)}</div>`;
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.setAttribute('aria-label', 'Eltávolítás');
+    x.onclick = () => { atts.splice(i, 1); renderTray(); };
+    d.append(x); t.append(d);
+  });
+  autosize();
+}
+async function uploadOne(f) {
+  if (!state.cwd) return;
+  const ext = ((f.type || '').split('/')[1] || 'bin').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
+  const name = f.name && f.name !== 'image.png' ? f.name : `kep-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.${ext}`;
+  const isImg = (f.type || '').startsWith('image/') || isImgName(name);
+  const a = { name, isImg, url: isImg ? URL.createObjectURL(f) : null, status: 'up' };
+  atts.push(a); renderTray();
+  try {
+    const r = await fetch(`/api/upload?cwd=${encodeURIComponent(state.cwd)}&name=${encodeURIComponent(name)}`, { method: 'POST', body: f });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.path) throw new Error(j.error || 'HTTP ' + r.status);
+    a.path = j.path; a.status = 'ok';
+  } catch (e) { a.status = 'err'; a.err = 'Feltöltési hiba: ' + e.message; toast(a.err); }
+  renderTray();
+}
+function addFiles(list) { [...list].forEach(uploadOne); }
+function addPath(p) {
+  if (atts.some(a => a.path === p)) return toast('Már csatolva');
+  atts.push({ name: base(p), path: p, isImg: isImgName(p), url: isImgName(p) ? fileUrl(p) : null, status: 'ok' });
+  renderTray();
+}
+function attMenu(o) {
+  const m = $('#attmenu'); o = o ?? m.hidden; m.hidden = !o; $('#plus').classList.toggle('on', o);
+}
+document.addEventListener('click', e => { if (!$('#attmenu').hidden && !e.target.closest('#attmenu,#plus')) attMenu(false); });
+function pickLocal(accept) {
+  attMenu(false);
+  const f = $('#fpick'); f.accept = accept; f.value = ''; f.click();
+}
+$('#fpick').onchange = e => addFiles(e.target.files);
+async function pasteClip() {
+  attMenu(false);
+  try {
+    const items = await navigator.clipboard.read(); let n = 0;
+    for (const it of items) for (const t of it.types) if (t.startsWith('image/')) { uploadOne(new File([await it.getType(t)], '', { type: t })); n++; }
+    if (!n) { const tx = await navigator.clipboard.readText(); if (tx) { input.value += (input.value ? '\n' : '') + tx; autosize(); } else toast('A vágólap üres'); }
+  } catch { toast('Nyomd hosszan a beviteli mezőt, és válaszd a Beillesztést'); input.focus(); }
+}
+input.addEventListener('paste', e => {
+  const fs = [...(e.clipboardData?.files || [])];
+  if (fs.length) { e.preventDefault(); addFiles(fs); }
+});
+let dragN = 0;
+addEventListener('dragenter', e => { if (e.dataTransfer?.types?.includes('Files')) { dragN++; $('#app').classList.add('dropping'); } });
+addEventListener('dragleave', () => { if (--dragN <= 0) { dragN = 0; $('#app').classList.remove('dropping'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#app').classList.remove('dropping'); if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+
+// ---------- fájltallózó ----------
+const fb = $('#fb');
+let fbs = { path: null, parent: null, file: null, hidden: store.get('fbhidden', false) };
+async function openFiles(forAttach, filePath) {
+  attMenu(false); drawer(false);
+  if (!fb.open) fb.showModal();
+  $('#fbhid').classList.toggle('on', fbs.hidden); $('#fbhid').style.color = fbs.hidden ? 'var(--accent2)' : '';
+  if (filePath) { fbs.path = filePath.replace(/\/[^/]*$/, '') || '/'; return fbView(filePath); }
+  return fbList(fbs.path && fbs.path.startsWith(state.cwd) ? fbs.path : state.cwd);
+}
+async function fbList(p) {
+  const r = await api('/api/files?path=' + encodeURIComponent(p || '') + (fbs.hidden ? '&hidden=1' : ''));
+  if (r.error) return toast(r.error);
+  fbs.path = r.path; fbs.parent = r.parent; fbs.file = null;
+  $('#fbpath').textContent = r.path; $('#fbview').hidden = true; $('#fbact').hidden = true;
+  const el = $('#fblist'); el.hidden = false; el.innerHTML = '';
+  if (!r.entries.length) el.innerHTML = '<div style="padding:14px;color:var(--muted)">Üres mappa.</div>';
+  for (const e of r.entries) {
+    const b = document.createElement('button'); b.className = 'fe';
+    const ic = e.dir ? '📁' : isImgName(e.name) ? '🖼️' : /\.pdf$/i.test(e.name) ? '📕' : '📄';
+    b.innerHTML = `<span>${ic}</span><span class="n">${esc(e.name)}</span><small>${e.dir ? '' : fsize(e.size) + ' · '}${ago(e.mtime)}</small>`;
+    const full = r.path.replace(/\/$/, '') + '/' + e.name;
+    b.onclick = () => e.dir ? fbList(full) : fbView(full);
+    el.append(b);
+  }
+  el.scrollTop = 0;
+}
+async function fbView(p) {
+  fbs.file = p; $('#fbpath').textContent = p;
+  $('#fblist').hidden = true; $('#fbact').hidden = false;
+  const v = $('#fbview'); v.hidden = false; v.innerHTML = '<div class="typing"><i></i><i></i><i></i></div>';
+  const url = fileUrl(p);
+  if (isImgName(p)) { v.innerHTML = `<img src="${url}" alt="">`; return; }
+  if (/\.pdf$/i.test(p)) { v.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted)">📕 PDF – csatold, és Claude elolvassa.</div>`; return; }
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    const ct = r.headers.get('content-type') || '', len = +r.headers.get('content-length') || 0;
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!/^text\/|json|javascript|xml/.test(ct)) { v.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted)">Bináris fájl (${fsize(len)}) – előnézet nem érhető el.</div>`; r.body?.cancel(); return; }
+    let t = await r.text(); const cut = t.length > 200000; if (cut) t = t.slice(0, 200000);
+    v.innerHTML = ''; const pre = document.createElement('pre'); pre.textContent = t + (cut ? '\n… (levágva)' : ''); v.append(pre);
+  } catch (e) { v.innerHTML = `<div class="err">Nem olvasható: ${esc(e.message)}</div>`; }
+}
+function fbBack() { if (fbs.file) fbList(fbs.path); else if (fbs.parent) fbList(fbs.parent); }
+function fbToggleHidden() { fbs.hidden = !fbs.hidden; store.set('fbhidden', fbs.hidden); openFiles(); }
+function fbAttach() { if (fbs.file) { addPath(fbs.file); fb.close(); toast('Csatolva: ' + base(fbs.file)); } }
+function fbInsertPath() {
+  if (!fbs.file) return;
+  const rel = state.cwd && fbs.file.startsWith(state.cwd + '/') ? fbs.file.slice(state.cwd.length + 1) : fbs.file;
+  input.value += (input.value && !/\s$/.test(input.value) ? ' ' : '') + rel + ' '; autosize(); fb.close(); input.focus();
+}
+
+async function restartEngine() {
+  if (!confirm(state.busy ? 'A motor a mostani válasz befejezése után indul újra. Mehet?' : 'Újraindítod a motort? (pár másodperc)')) return;
+  const r = await api('/api/restart', {});
+  if (!r.ok) return toast(r.error || 'Nem sikerült');
+  toast(r.waiting ? 'A futó válasz után újraindul…' : 'Újraindítás…');
+  // ha a motor újra elérhető, töltsük újra az oldalt, hogy az új verzió induljon
+  const t0 = Date.now();
+  const iv = setInterval(async () => {
+    if (Date.now() - t0 > 30 * 60e3) return clearInterval(iv);
+    try { const h = await (await fetch('/api/health', { cache: 'no-store' })).json(); if (h.ok && h.pid !== undefined && h.pid !== r.pid) { clearInterval(iv); location.reload(); } } catch {}
+  }, 3000);
+}
+
+// ---------- csíkok: 5 órás limit (bal) + kontextus (jobb) ----------
+let ctx = { tokens: 0, window: 200000, model: null }, usage = null;
+const MODEL_HU = m => (m || '').replace(/^claude-/, '').replace(/-(\d+)-(\d+).*$/, ' $1.$2').replace(/\[1m\]/i, ' 1M').replace(/^./, c => c.toUpperCase());
+function setCtx(tokens, win, model) {
+  ctx.tokens = tokens || 0;
+  if (model) ctx.model = model;
+  ctx.window = win || store.get('ctxwin', {})[ctx.model] || (/\[1m\]/i.test(ctx.model || '') ? 1e6 : (win === undefined && ctx.window) || 200000);
+  paintRails();
+}
+function setDefaultModel(m) { const o = $('#model').options[0]; o.textContent = 'Alapértelmezett (' + MODEL_HU(m) + ')'; }
+function lvl(p) { return p < 60 ? 'var(--ok)' : p < 85 ? 'var(--accent)' : 'var(--err)'; }
+function hhmm(iso) { try { const d = new Date(iso); const t = d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString('hu-HU', { weekday: 'short' }) + ' ' + t; } catch { return ''; } }
+function paintRail(el, pct) {
+  el.classList.toggle('none', pct == null);
+  const f = el.querySelector('.fl'); const p = Math.max(0, Math.min(100, pct || 0));
+  f.style.height = (pct ? Math.max(p, 1.5) : 0) + '%'; f.style.background = lvl(p);
+}
+function ctxPct() { return ctx.tokens ? ctx.tokens / ctx.window * 100 : null; }
+function paintRails() {
+  paintRail($('#railL'), usage?.five ? usage.five.pct : null);
+  paintRail($('#railR'), ctxPct());
+  const parts = [];
+  if (usage?.five) parts.push(`5 óra: ${Math.round(usage.five.pct)}%`);
+  if (ctx.tokens) parts.push(`Kontextus: ${Math.round(ctxPct())}%`);
+  $('#stat').textContent = parts.join(' · ');
+}
+function railInfo(side) {
+  const k = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n / 1000) + 'k';
+  const L = usage?.five ? `5 órás limit: ${Math.round(usage.five.pct)}% – visszaáll ${hhmm(usage.five.resets)}` : (usage?.error ? 'Limit: ' + usage.error : 'Limit: nincs adat');
+  const W = usage?.week ? ` · Heti: ${Math.round(usage.week.pct)}%` : '';
+  const R = ctx.tokens ? `Kontextus: ${Math.round(ctxPct())}% (${k(ctx.tokens)} / ${k(ctx.window)} token)` : 'Kontextus: még üres';
+  toast(side === 'l' ? L + W : side === 'r' ? R : L + W + '\n' + R);
+}
+async function loadUsage(fresh) {
+  try { const r = await fetch('/api/usage' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' }); const j = await r.json(); if (!j.error || !usage) usage = j; paintRails(); } catch {}
+}
+setInterval(() => { if (!document.hidden) loadUsage(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadUsage(); });
+loadUsage();
+
+// ---------- hang: diktálás (Android natív felismerő, böngészőben Web Speech) + felolvasás ----------
+const micBtn = $('#mic');
+const hasNativeVoice = (() => { try { return !!(window.ClaudeApp && ClaudeApp.hasVoice && ClaudeApp.hasVoice()); } catch { return false; } })();
+const WebSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let listening = false, vbase = '', webRec = null;
+micBtn.hidden = !(hasNativeVoice || WebSR);
+function vtoast(t) {
+  const d = document.createElement('div'); d.className = 'vtoast'; d.textContent = t; document.body.append(d);
+  setTimeout(() => d.remove(), 2600);
+}
+function micUI(level) {
+  micBtn.classList.toggle('on', listening);
+  micBtn.setAttribute('aria-label', listening ? 'Diktálás leállítása' : 'Diktálás');
+  const l = listening ? Math.max(0, Math.min(1, ((level ?? 0) + 2) / 12)) : 0;
+  micBtn.style.boxShadow = listening ? `0 0 0 ${3 + l * 12}px color-mix(in srgb, var(--err) 30%, transparent)` : '';
+  input.placeholder = listening ? 'Hallgatlak… beszélj' : 'Írj Claude-nak…';
+}
+function voiceDone(text) {
+  listening = false; micUI();
+  input.value = (vbase + (text || '')).trim(); autosize();
+  if (text && $('#vsend').value === '1' && !state.busy) onSend(); else input.focus();
+}
+function micToggle() {
+  if (listening) { try { hasNativeVoice ? ClaudeApp.stopListening() : webRec?.stop(); } catch {} return; }
+  stopSpeaking();
+  vbase = input.value.trim() ? input.value.replace(/\s*$/, ' ') : '';
+  listening = true; micUI();
+  try { window.ClaudeApp?.vibrate(); } catch {}
+  if (hasNativeVoice) { ClaudeApp.startListening('hu-HU'); return; }
+  webRec = new WebSR(); webRec.lang = 'hu-HU'; webRec.interimResults = true; webRec.continuous = false;
+  let fin = '';
+  webRec.onresult = ev => {
+    let t = ''; for (const r of ev.results) t += r[0].transcript;
+    fin = t; input.value = vbase + t; autosize();
+  };
+  webRec.onerror = ev => { if (ev.error !== 'aborted') vtoast(ev.error === 'no-speech' ? 'Nem hallottam semmit.' : 'Felismerési hiba: ' + ev.error); };
+  webRec.onend = () => voiceDone(fin);
+  webRec.start();
+}
+// App megnyitása a tableten: az app kis ablakba (PiP) ugrik, alá nyílik a kért alkalmazás
+function launchApp(pkg, label) {
+  try {
+    if (window.ClaudeApp?.launchApp) { ClaudeApp.launchApp(pkg); add('📱 ' + esc(label || pkg) + ' megnyitva', 'meta'); return; }
+  } catch (err) { add('Nem sikerült megnyitni: ' + esc(String(err)), 'err'); return; }
+  add('📱 ' + esc(label || pkg) + ' – ehhez frissítsd a Claude Tablet appot', 'meta');
+}
+window.onPip = on => { document.body.classList.toggle('pip', !!on); if (on) scrollDown(true); };
+
+window.onVoice = (type, text) => {
+  if (type === 'partial') { input.value = vbase + text; autosize(); }
+  else if (type === 'final') voiceDone(text);
+  else if (type === 'level') micUI(parseFloat(text));
+  else if (type === 'error') {
+    const typed = input.value.slice(vbase.length).trim();
+    listening = false; micUI();
+    if (text !== 'cancel' && !typed) vtoast(text);
+    if (typed) voiceDone(typed);
+  }
+};
+function speakReply(t) {
+  if ($('#tts').value !== '1') return;
+  const txt = plain(t).slice(0, 6000); if (!txt) return;
+  try { if (window.ClaudeApp?.speak) return ClaudeApp.speak(txt); } catch {}
+  if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(txt); u.lang = 'hu-HU'; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+}
+function stopSpeaking() {
+  try { window.ClaudeApp?.stopSpeaking?.(); } catch {}
+  try { window.speechSynthesis?.cancel(); } catch {}
+}
+
+// ---------- egyéb UI ----------
+function drawer(o) { $('#app').classList.toggle('open', o); }
+window.drawer = drawer; // az Android app (WebView) is hívhatja
+function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, innerHeight * 0.4) + 'px'; sendBtn.disabled = !state.busy && !input.value.trim() && !atts.length; }
+input.addEventListener('input', autosize);
+input.addEventListener('keydown', e => {
+  // fizikai billentyűzeten Enter = küldés, Shift+Enter = új sor
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer:fine)').matches) { e.preventDefault(); if (!state.busy) onSend(); }
+  if (e.key === 'Escape' && state.busy) stop();
+});
+CHIPS.forEach(([label, text]) => {
+  const c = document.createElement('button'); c.className = 'chip'; c.textContent = label;
+  c.onclick = () => { input.value = text; autosize(); input.focus(); if (text.endsWith('.') && !state.busy) onSend(); };
+  $('#chips').append(c);
+});
+function syncBubble() { try { if (window.ClaudeApp && ClaudeApp.bubbleOn) { $('#bubbleRow').style.display = ''; $('#bubble').value = ClaudeApp.bubbleOn() ? '1' : '0'; } } catch {} }
+syncBubble(); document.addEventListener('visibilitychange', () => { if (!document.hidden) syncBubble(); });
+['mode', 'model', 'theme', 'vsend', 'tts'].forEach(k => {
+  const el = $('#' + k); if (!el) return; el.value = store.get(k, el.value);
+  el.onchange = () => { store.set(k, el.value); if (k === 'theme') applyTheme(); };
+});
+function applyTheme() { document.documentElement.dataset.theme = $('#theme').value; document.querySelector('meta[name=theme-color]').content = $('#theme').value === 'light' ? '#f6f4ee' : '#1a1915'; }
+
+applyTheme(); setBusy(false); autosize();
+// Megosztás az Android appból: ?share=<szöveg> -> beviteli mezőbe, majd a paraméter eltávolítása
+(() => {
+  const u = new URL(location.href), sh = u.searchParams.get('share');
+  if (sh === null) return;
+  input.value = input.value ? input.value + '\n' + sh : sh; autosize();
+  u.searchParams.delete('share');
+  try { history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch {}
+  setTimeout(() => input.focus(), 300);
+})();
+(async () => {
+  if (!state.cwd) { const p = await api('/api/projects'); state.cwd = p.recent[0] || p.home; }
+  setProject(state.cwd);
+})();
+</script>
+<script>
+(function(){ const A=window.ClaudeApp; if(!A||!A.setBubble) return;
+  const r=document.getElementById('bubbleRow'), sel=document.getElementById('bubbleSel'); r.style.display='';
+  const sync=()=>{ try{ sel.value=A.bubbleOn()?'1':'0'; }catch(e){} }; sync(); setInterval(sync,3000); })();
+</script>
+</body>
+</html>

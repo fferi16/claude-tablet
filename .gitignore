@@ -1,0 +1,17 @@
+# aláírókulcs – soha ne kerüljön a repóba (a build szkriptek generálnak egyet, ha nincs)
+*.keystore
+*.jks
+
+# build kimenet
+build/
+*.apk
+*.dex
+
+# régi változatok, mentések
+*.bak
+*.v[0-9]*.bak
+
+# függőségek, helyi adatok
+node_modules/
+.claude-uploads/
+*.log
