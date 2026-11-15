@@ -93,12 +93,12 @@ public class ProcessTextActivity extends Activity {
     /** feltöltés a motorra (a felhasználó home mappájába) – visszaadja a fájl útvonalát */
     String upload(Uri u, String name) {
         try {
-            HttpURLConnection c = (HttpURLConnection) new URL(MainActivity.BASE + "api/projects").openConnection();
+            HttpURLConnection c = MainActivity.openLocal(this, "api/projects");
             c.setConnectTimeout(3000);
             String home = new JSONObject(read(c.getInputStream())).getString("home");
             c.disconnect();
-            c = (HttpURLConnection) new URL(MainActivity.BASE + "api/upload?cwd=" + URLEncoder.encode(home, "UTF-8")
-                    + "&name=" + URLEncoder.encode(name, "UTF-8")).openConnection();
+            c = MainActivity.openLocal(this, "api/upload?cwd=" + URLEncoder.encode(home, "UTF-8")
+                    + "&name=" + URLEncoder.encode(name, "UTF-8"));
             c.setRequestMethod("POST"); c.setDoOutput(true); c.setChunkedStreamingMode(64 * 1024);
             c.setConnectTimeout(3000);
             try (InputStream is = getContentResolver().openInputStream(u); OutputStream os = c.getOutputStream()) {

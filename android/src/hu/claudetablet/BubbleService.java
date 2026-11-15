@@ -589,7 +589,7 @@ public class BubbleService extends Service {
         try {
             JSONObject body = new JSONObject();
             body.put("text", text); body.put("screen", screen); body.put("newSession", fresh);
-            c = (HttpURLConnection) new URL(BASE + "api/bubble").openConnection();
+            c = MainActivity.openLocal(this, "api/bubble");
             c.setConnectTimeout(4000); c.setReadTimeout(0);
             c.setRequestMethod("POST"); c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json");
@@ -630,10 +630,7 @@ public class BubbleService extends Service {
     }
 
     void startServer() {
-        Intent i = new Intent("com.termux.RUN_COMMAND");
-        i.setClassName("com.termux", "com.termux.app.RunCommandService");
-        i.putExtra("com.termux.RUN_COMMAND_PATH", MainActivity.START_SCRIPT);
-        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        Intent i = MainActivity.termuxCommand(this, MainActivity.START_SCRIPT);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); } catch (Exception e) {}
     }
 
@@ -711,7 +708,7 @@ public class BubbleService extends Service {
         setStatus(L.t("Leállítás…"));
         new Thread(new Runnable() { public void run() {
             try {
-                HttpURLConnection c = (HttpURLConnection) new URL(BASE + "api/stop").openConnection();
+                HttpURLConnection c = MainActivity.openLocal(BubbleService.this, "api/stop");
                 c.setRequestMethod("POST"); c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json");
                 try (OutputStream o = c.getOutputStream()) { o.write(new JSONObject().put("runId", id).toString().getBytes("UTF-8")); }
                 c.getResponseCode(); c.disconnect();

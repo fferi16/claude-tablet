@@ -35,9 +35,12 @@ autoconnect(){
 }
 ensure(){ [ -z "$IP" ] && { echo "Ehhez ADB kell: kapcsold be az app tabletvezérlését, vagy add meg a tablet IP-jét: echo 192.168.x.y > ~/.tablet-ip" >&2; exit 1; }
   autoconnect || exit 1; }
+# a motor kulcsa (az app adja át a Termuxnak); nélküle a védett motor 401-et ad
+CT_SECRET=$(cat /data/data/com.termux/files/home/.claude-tablet/secret 2>/dev/null)
+CTH="X-CT-Secret: $CT_SECRET"
 # ügynök (az app akadálymentességi szolgáltatása): ADB nélkül; 0 = kész, 2 = nem elérhető / nem tudja -> ADB
 ag(){ local j r; j=$(python3 -c 'import json,sys; a=sys.argv[1:]; d={"cmd":a[0]}; d.update(dict(zip(a[1::2],a[2::2]))); print(json.dumps(d))' "$@")
-  r=$(curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" http://127.0.0.1:8765/api/agent/do 2>/dev/null) || return 2
+  r=$(curl -s -m 25 -X POST -H "$CTH" -H 'Content-Type: application/json' -d "$j" http://127.0.0.1:8765/api/agent/do 2>/dev/null) || return 2
   [ -z "$r" ] && return 2
   echo "$r" | grep -q '"noAgent":true\|"unsupported":true' && return 2
   if echo "$r" | grep -q '"ok":true'; then
@@ -53,16 +56,16 @@ case "$1" in
   shot) f=${2:-~/tablet-shots/now.png}; f=$(realpath -m "$f"); [ -z "$CT_ADB" ] && agn shot file "$f"
         ensure; mkdir -p "$(dirname "$f")"
         # a lebegő Claude-gomb/panel ne legyen rajta a képen
-        hid=0; [ -z "$CT_NO_HIDE" ] && curl -s -m 2 -X POST "http://127.0.0.1:8765/api/overlay?show=0" 2>/dev/null | grep -q '"delivered":[1-9]' && { hid=1; sleep 0.4; }
+        hid=0; [ -z "$CT_NO_HIDE" ] && curl -s -m 2 -X POST -H "$CTH" "http://127.0.0.1:8765/api/overlay?show=0" 2>/dev/null | grep -q '"delivered":[1-9]' && { hid=1; sleep 0.4; }
         $A exec-out screencap -p > "$f"; rc=$?
-        [ $hid = 1 ] && curl -s -m 2 -X POST "http://127.0.0.1:8765/api/overlay?show=1" >/dev/null 2>&1
+        [ $hid = 1 ] && curl -s -m 2 -X POST -H "$CTH" "http://127.0.0.1:8765/api/overlay?show=1" >/dev/null 2>&1
         [ $rc = 0 ] && echo "$f";;
   tap) [ -z "$CT_ADB" ] && agn tap x "$2" y "$3"; ensure; $A shell input tap "$2" "$3";;
   swipe) [ -z "$CT_ADB" ] && agn swipe x1 "$2" y1 "$3" x2 "$4" y2 "$5" ms "${6:-300}"; ensure; $A shell input swipe "$2" "$3" "$4" "$5" "${6:-300}";;
   type) [ -z "$CT_ADB" ] && agn type text "$2"; ensure; $A shell input text "$(printf %s "$2" | sed 's/ /%s/g')";;
   key) [ -z "$CT_ADB" ] && agn key key "$2"; ensure; $A shell input keyevent "KEYCODE_${2^^}";;
   open) # 1) ha a Claude Tablet app nyitva van: az app kis ablakba ugrik, alá nyílik a kért app
-        r=$(curl -s -m 3 -X POST -H 'Content-Type: application/json' -d "{\"app\":\"$2\"}" http://127.0.0.1:8765/api/launch 2>/dev/null)
+        r=$(curl -s -m 3 -X POST -H "$CTH" -H 'Content-Type: application/json' -d "{\"app\":\"$2\"}" http://127.0.0.1:8765/api/launch 2>/dev/null)
         if echo "$r" | grep -q '"delivered":[1-9]'; then echo "megnyitva az appon át (kép a képben): $2"; exit 0; fi
         # 2) különben ADB-vel (zárolt tableten nem megy)
         pkg=$(echo "$r" | sed -n 's/.*"pkg":"\([^"]*\)".*/\1/p'); pkg=${pkg:-$2}

@@ -11,6 +11,18 @@ PIDFILE="$STATE_DIR/server.pid"
 PD_LIB="$PREFIX/var/lib/proot-distro"
 mkdir -p "$STATE_DIR"
 
+# Az app saját titka (1. argumentum): ezzel azonosítja magát a motornál, így a tableten lévő más appok
+# nem vezérelhetik. Csak a Termux (és a benne futó proot) olvashatja. A motor menet közben is észreveszi.
+if [ -n "$1" ]; then
+  if printf %s "$1" | grep -qE '^[0-9a-f]{32,128}$'; then
+    if [ "$(cat "$STATE_DIR/secret" 2>/dev/null)" != "$1" ]; then
+      ( umask 077; printf %s "$1" > "$STATE_DIR/secret.tmp" ) && mv -f "$STATE_DIR/secret.tmp" "$STATE_DIR/secret"
+    fi
+  else
+    echo "Érvénytelen titok-formátum – figyelmen kívül hagyva." >&2
+  fi
+fi
+
 alive() { curl -fsS -m 2 "$HEALTH" >/dev/null 2>&1; }
 
 if alive; then echo "Claude Tablet motor már fut."; exit 0; fi

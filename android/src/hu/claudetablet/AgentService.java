@@ -62,7 +62,7 @@ public class AgentService extends AccessibilityService {
         while (alive) {
             HttpURLConnection c = null;
             try {
-                c = (HttpURLConnection) new URL(MainActivity.BASE + "api/agent/listen").openConnection();
+                c = MainActivity.openLocal(this, "api/agent/listen");
                 c.setConnectTimeout(3000);
                 c.setReadTimeout(60000); // a szerver 20 mp-enként pingel
                 BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"));
@@ -84,7 +84,7 @@ public class AgentService extends AccessibilityService {
     void reply(final JSONObject o) {
         new Thread(new Runnable() { public void run() {
             try {
-                HttpURLConnection c = (HttpURLConnection) new URL(MainActivity.BASE + "api/agent/result").openConnection();
+                HttpURLConnection c = MainActivity.openLocal(AgentService.this, "api/agent/result");
                 c.setRequestMethod("POST"); c.setDoOutput(true);
                 c.setConnectTimeout(3000); c.setReadTimeout(30000);
                 c.setRequestProperty("Content-Type", "application/json");

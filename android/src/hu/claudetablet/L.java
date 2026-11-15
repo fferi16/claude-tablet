@@ -41,6 +41,9 @@ public final class L {
     static {
         M.put("Engedélyezd: Megjelenítés más alkalmazások felett", "Allow: Display over other apps");
         M.put("Lebegő Claude-gomb", "Floating Claude button");
+        M.put("Párosítás a motorral…", "Pairing with the engine…");
+        M.put("Frissítsd a Termux szkripteket: sh /root/claude-tablet/install.sh", "Update the Termux scripts: sh /root/claude-tablet/install.sh");
+        M.put("A motor nem fogadja el az app kulcsát. Frissítsd a Termux szkripteket (sh /root/claude-tablet/install.sh), majd próbáld újra.", "The engine does not accept the app's key. Update the Termux scripts (sh /root/claude-tablet/install.sh), then retry.");
         M.put("Koppints a gombra bármelyik appban", "Tap the button in any app");
         M.put("Kikapcsolás", "Turn off");
         M.put("Új beszélgetés", "New chat");

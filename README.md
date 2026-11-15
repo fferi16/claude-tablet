@@ -97,9 +97,20 @@ Hasznos még (adb): `adb shell settings put global settings_enable_monitor_phant
 
 ## Biztonság
 
-A szerver alapból csak a `127.0.0.1`-en figyel, **token nélkül** – így a tableten futó bármely más app is elérheti
-(és Claude-on keresztül parancsot futtathat). Csak olyan eszközön használd, amelyen megbízol a telepített appokban.
-`HOST=0.0.0.0` esetén a szerver véletlen tokent kér, amit induláskor kiír.
+A motor Claude-on keresztül parancsot futtat, és az app akadálymentességi szolgáltatásán át a tabletet is vezérelheti
+(koppintás, gépelés, képernyőkép) – ezért védeni kell:
+
+- **Más appok ellen (1.10.0-tól):** az app első indításkor saját titkot generál, és a Termuxon át (`start-server.sh <titok>`)
+  adja át a motornak (`~/.claude-tablet/secret`, csak a Termux olvashatja). Ettől kezdve a motor csak az ezt ismerő
+  kéréseket fogadja (`X-CT-Secret` fejléc vagy süti). A `bin/tablet` parancs a fájlból olvassa.
+  Ha a Termux szkriptek még régiek (nem mentik a titkot), a motor a régi módon, védelem nélkül fut – ilyenkor
+  futtasd újra: `sh /root/claude-tablet/install.sh`.
+- **Idegen weboldalak ellen:** a motor elutasítja a más oldalról érkező kéréseket (`Origin`, `Sec-Fetch-Site`) és a nem
+  `127.0.0.1`/`localhost` `Host` fejlécet (DNS-rebinding).
+- **Böngészőből a tableten** (app nélkül, védett motornál): `http://127.0.0.1:8765/?token=<titok>` – a titok:
+  `cat ~/.claude-tablet/secret` (Termuxban).
+- **PC-s mód** (`HOST=0.0.0.0`): 10 karakteres párosító kód (induláskor kiírja), percenként legfeljebb 10 hibás
+  próbálkozás IP-nként. A forgalom sima HTTP – csak megbízható (otthoni) Wi-Fin használd.
 
 Ha megadod a `WRITE_SECURE_SETTINGS` engedélyt, az app bekapcsolja a vezeték nélküli hibakeresést (ADB). Ez a helyi
 hálózaton párosítás után teljes hozzáférést ad a tablethez – idegen Wi-Fi-n ne hagyd bekapcsolva.

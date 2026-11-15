@@ -63,6 +63,61 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
 
     static final String BASE = "http://127.0.0.1:8765/";
+
+    // ---- Az app saját titka a helyi motorhoz ----
+    // Első használatkor generálódik, és a Termuxon át (start-server.sh <titok>) jut el a motorhoz.
+    // A motor ezután csak az ezt ismerő kéréseket fogadja, így a tableten lévő más appok nem vezérelhetik.
+    static String secret(Context ctx) {
+        SharedPreferences p = ctx.getSharedPreferences("app", Context.MODE_PRIVATE);
+        String s = p.getString("ctSecret", null);
+        if (s == null) {
+            byte[] b = new byte[24];
+            new java.security.SecureRandom().nextBytes(b);
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format("%02x", x & 0xff));
+            s = sb.toString();
+            p.edit().putString("ctSecret", s).commit();
+        }
+        return s;
+    }
+
+    /** Kapcsolat a helyi motorhoz, a titokkal hitelesítve. */
+    static HttpURLConnection openLocal(Context ctx, String path) throws java.io.IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(BASE + path).openConnection();
+        c.setRequestProperty("X-CT-Secret", secret(ctx));
+        return c;
+    }
+
+    /** RUN_COMMAND a Termuxnak; az indító szkript argumentumként megkapja (és elmenti) az app titkát. */
+    static Intent termuxCommand(Context ctx, String script) {
+        Intent i = new Intent("com.termux.RUN_COMMAND");
+        i.setClassName("com.termux", "com.termux.app.RunCommandService");
+        i.putExtra("com.termux.RUN_COMMAND_PATH", script);
+        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        if (script.endsWith("start-server.sh"))
+            i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{secret(ctx)});
+        return i;
+    }
+
+    /** A helyi motor szerint ez az app hitelesített-e: "ok", "bad", "off" (nincs védelem) vagy null (régi motor / hiba). */
+    static String authState(Context ctx) {
+        HttpURLConnection c = null;
+        try {
+            c = openLocal(ctx, "api/health");
+            c.setConnectTimeout(600); c.setReadTimeout(1500); c.setUseCaches(false);
+            if (c.getResponseCode() != 200) return null;
+            java.io.InputStream in = c.getInputStream();
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[2048]; int n;
+            while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+            String a = new JSONObject(bo.toString("UTF-8")).optString("auth", "");
+            return a.isEmpty() ? null : a;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
     static final String PING = BASE + "api/projects";
     static final String START_SCRIPT = "/data/data/com.termux/files/home/.claude-tablet/start-server.sh";
     static final String WAKE_SCRIPT = "/data/data/com.termux/files/home/.claude-tablet/wake-server.sh";
@@ -135,7 +190,8 @@ public class MainActivity extends Activity {
     String engineBase() { return remoteHost == null ? BASE : "http://" + remoteHost + "/"; }
     /** belépő URL: távoli gépnél a párosító kóddal (a szerver sütit ad, és továbbirányít) */
     String engineEntry(String extra) {
-        if (remoteHost == null) return BASE + (extra == null ? "" : "?" + extra);
+        if (remoteHost == null) // helyi motor: a titokkal lép be (süti); titok nélküli (régi) motor egyszerűen továbbenged
+            return BASE + "?token=" + secret(this) + (extra == null ? "" : "&" + extra);
         return engineBase() + "?token=" + Uri.encode(remoteCode) + (extra == null ? "" : "&" + extra);
     }
 
@@ -260,10 +316,7 @@ public class MainActivity extends Activity {
     /** Háttérparancs a Termuxnak: a szolgáltatásindítás feloldja a fagyasztást, a szkript pedig
      *  csak akkor indít motort, ha tényleg nem fut. */
     void nudgeTermux() {
-        Intent i = new Intent("com.termux.RUN_COMMAND");
-        i.setClassName("com.termux", "com.termux.app.RunCommandService");
-        i.putExtra("com.termux.RUN_COMMAND_PATH", START_SCRIPT);
-        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        Intent i = termuxCommand(this, START_SCRIPT);
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
@@ -519,8 +572,9 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             public void run() {
                 final boolean up = ping();
+                final String auth = up && remoteHost == null ? authState(MainActivity.this) : null;
                 ui.post(new Runnable() {
-                    public void run() { onPoll(up); }
+                    public void run() { onPoll(up, auth); }
                 });
             }
         }).start();
@@ -542,9 +596,32 @@ public class MainActivity extends Activity {
         }
     }
 
-    void onPoll(boolean up) {
+    boolean secretSent = false;
+    long secretSentAt;
+
+    void onPoll(boolean up, String auth) {
         if (!polling || isFinishing()) return;
-        if (up) { showWeb(); return; }
+        if (up) {
+            // távoli gép, régi (védelem nélküli) motor, vagy már ismeri a titkunkat → mehet
+            if (remoteHost != null || auth == null || "ok".equals(auth)) { secretSent = false; showWeb(); return; }
+            // a helyi motor fut, de még nem ismeri ennek az appnak a titkát → átadjuk a Termuxon át
+            long now = System.currentTimeMillis();
+            if (!secretSent) {
+                secretSent = true; secretSentAt = now;
+                if (termuxInstalled() && hasRunPerm()) nudgeTermux();
+            } else if (now - secretSentAt > 8000) {
+                secretSent = false;
+                if ("off".equals(auth)) {
+                    // régi start-server.sh (nem menti a titkot): működik, de védelem nélkül
+                    toast(L.t("Frissítsd a Termux szkripteket: sh /root/claude-tablet/install.sh"));
+                    showWeb();
+                } else showHelp("auth");
+                return;
+            }
+            setStatus(L.t("Párosítás a motorral…"));
+            ui.postDelayed(new Runnable() { public void run() { pollOnce(); } }, POLL_MS);
+            return;
+        }
         if (!startTried) {
             startTried = true;
             if (!tryStartServer()) return; // engedélykérés vagy hiba: onRequestPermissionsResult folytatja
@@ -593,10 +670,7 @@ public class MainActivity extends Activity {
     }
 
     boolean sendRunCommand() {
-        Intent i = new Intent("com.termux.RUN_COMMAND");
-        i.setClassName("com.termux", "com.termux.app.RunCommandService");
-        i.putExtra("com.termux.RUN_COMMAND_PATH", START_SCRIPT);
-        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        Intent i = termuxCommand(this, START_SCRIPT);
         i.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
@@ -1092,6 +1166,7 @@ public class MainActivity extends Activity {
         String why;
         if (reason.equals("notermux")) why = L.t("A Termux alkalmazás nincs telepítve ezen az eszközön.");
         else if (reason.startsWith("perm")) why = L.t("Az alkalmazásnak nincs engedélye parancsot futtatni a Termuxban.");
+        else if (reason.equals("auth")) why = L.t("A motor nem fogadja el az app kulcsát. Frissítsd a Termux szkripteket (sh /root/claude-tablet/install.sh), majd próbáld újra.");
         else if (reason.equals("timeout")) why = L.t("A szerver 25 másodperc alatt sem válaszolt (127.0.0.1:8765). ") +
                 L.t("Lehet, hogy a Termux nem engedi külső alkalmazások parancsait, vagy hiányzik az indító szkript.");
         else why = L.t("Hiba a Termux hívásakor: ") + reason.replaceFirst("^error:", "");

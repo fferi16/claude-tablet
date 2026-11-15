@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.9.0';
+const VERSION = '1.10.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -32,10 +32,49 @@ function findClaude() {
   return null;
 }
 function log(...a) { console.log(new Date().toISOString(), ...a); }
-// Ha nem csak localhoston fut, token kell (a tablet böngészője ?token=... linkkel nyitja).
-// A párosító kód megmarad újraindítás után is (a tablet appban egyszer kell megadni).
-const TOKEN = HOST === '127.0.0.1' || HOST === 'localhost' ? null
-  : (process.env.TOKEN || (() => { const c = loadCfg(); if (!c.token) { c.token = crypto.randomBytes(4).toString('hex'); saveCfg(c); } return c.token; })());
+// ---- Hozzáférés-védelem ----
+// Helyi mód (127.0.0.1, a tableten): az Android app egy saját titkot ad át a Termuxon keresztül
+// (start-server.sh <titok> → ~/.claude-tablet/secret, csak a Termux olvashatja). Ha van titok, minden
+// kérésnek tartalmaznia kell (X-CT-Secret fejléc vagy ct_token süti) – így a tableten lévő MÁS appok
+// nem vezérelhetik a motort. Titok nélkül (régi app) a motor a régi módon, védelem nélkül fut.
+// Hálózati mód (HOST=0.0.0.0, PC): párosító kód kell (a tablet appban egyszer kell megadni).
+const LOCAL = HOST === '127.0.0.1' || HOST === 'localhost';
+const CODE_ALPHA = '0123456789abcdefghjkmnpqrstvwxyz'; // 32 jel, félreolvasható i/l/o/u nélkül
+function newCode(n) { let s = ''; for (const b of crypto.randomBytes(n)) s += CODE_ALPHA[b & 31]; return s; }
+const TOKEN = LOCAL ? null
+  : (process.env.TOKEN || (() => {
+      const c = loadCfg();
+      if (!c.token || c.token.length < 10) { c.token = newCode(10); saveCfg(c); } // ~50 bit; a régi rövid kódot lecseréli
+      return c.token;
+    })());
+const APP_SECRET_FILE = process.env.CT_SECRET_FILE || '/data/data/com.termux/files/home/.claude-tablet/secret';
+let secretCache = { m: -1, v: null };
+function appSecret() {
+  try {
+    const st = fs.statSync(APP_SECRET_FILE);
+    if (st.mtimeMs !== secretCache.m) secretCache = { m: st.mtimeMs, v: fs.readFileSync(APP_SECRET_FILE, 'utf8').trim() || null };
+  } catch { secretCache = { m: -1, v: null }; }
+  return secretCache.v;
+}
+function accessKey() { return LOCAL ? appSecret() : TOKEN; }
+function sameStr(a, b) {
+  a = Buffer.from(String(a)); b = Buffer.from(String(b));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function getCookie(req, name) {
+  for (const p of String(req.headers.cookie || '').split(';')) {
+    const i = p.indexOf('=');
+    if (i > 0 && p.slice(0, i).trim() === name) { try { return decodeURIComponent(p.slice(i + 1).trim()); } catch { return null; } }
+  }
+  return null;
+}
+function givenKey(req) { return req.headers['x-ct-secret'] || getCookie(req, 'ct_token'); }
+// 'off' = nincs védelem beállítva, 'ok' = a kérés helyes kulcsot hozott, 'bad' = hiányzik/hibás
+function authState(req) { const k = accessKey(); if (!k) return 'off'; const g = givenKey(req); return g && sameStr(g, k) ? 'ok' : 'bad'; }
+// hibás kód/kulcs próbálkozások korlátozása IP-nként (percenként 10)
+const authFails = new Map();
+function tooManyFails(ip) { const f = authFails.get(ip); return !!f && f.n >= 10 && Date.now() - f.t < 60000; }
+function noteFail(ip) { const now = Date.now(), f = authFails.get(ip); if (!f || now - f.t > 60000) authFails.set(ip, { n: 1, t: now }); else f.n++; }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const runs = new Map(); // runId -> child process
@@ -446,19 +485,46 @@ function serveFile(req, res, u) {
   fs.createReadStream(fp).pipe(res);
 }
 
+function deny(res, u, code, msg) {
+  if (u.pathname.startsWith('/api/')) return json(res, code, { error: msg, auth: code === 401 });
+  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(msg);
+}
+/** true = mehet tovább; false = a választ már elküldte (elutasítás vagy átirányítás) */
+function guard(req, res, u) {
+  const host = String(req.headers.host || '');
+  // 1) Host: helyi módban csak 127.0.0.1 / localhost (DNS-rebinding ellen)
+  if (LOCAL && !['127.0.0.1', 'localhost'].includes(host.replace(/:\d+$/, ''))) { deny(res, u, 403, 'Tiltott Host fejléc'); return false; }
+  // 2) Idegen weboldal nem küldhet kérést: Origin csak a saját címünk lehet, és a böngésző
+  //    Sec-Fetch-Site jelzése sem lehet „más oldalról” (a válasz nélküli „egyszerű” POST-ok ellen is véd)
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== 'http://' + host) { deny(res, u, 403, 'Idegen eredetű kérés'); return false; }
+  const sfs = req.headers['sec-fetch-site'];
+  if (u.pathname.startsWith('/api/') && sfs && sfs !== 'same-origin' && sfs !== 'none') { deny(res, u, 403, 'Idegen eredetű kérés'); return false; }
+  // 3) Kulcs / párosító kód
+  if (u.pathname === '/api/health') return true; // állapot (titkot nem ad ki); az indító szkriptek használják
+  const key = accessKey(), ip = req.socket.remoteAddress || '?';
+  if (u.searchParams.has('token')) { // belépő link: ?token=... → süti, majd átirányítás a token nélküli címre
+    const t = u.searchParams.get('token'); u.searchParams.delete('token');
+    const rest = u.searchParams.toString(), loc = '/' + (rest ? '?' + rest : '');
+    if (key && tooManyFails(ip)) { deny(res, u, 429, 'Túl sok hibás próbálkozás – várj egy percet.'); return false; }
+    if (key && !sameStr(t, key)) { noteFail(ip); deny(res, u, 401, 'Hibás kód / kulcs.'); return false; }
+    const h = { Location: loc };
+    if (key) h['Set-Cookie'] = `ct_token=${encodeURIComponent(key)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
+    res.writeHead(302, h); res.end(); return false;
+  }
+  if (!key) return true; // helyi mód, az app még nem adott titkot (régi app) – visszafelé kompatibilis
+  const g = givenKey(req);
+  if (g && sameStr(g, key)) return true;
+  if (g) noteFail(ip);
+  deny(res, u, 401, LOCAL ? 'Hiányzó vagy hibás kulcs – nyisd meg a Claude Tablet appot.' : 'Hiányzó kód – nyisd meg a szerver által kiírt linket.');
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (TOKEN) {
-    const cookieOk = (req.headers.cookie || '').includes('ct_token=' + TOKEN);
-    if (u.searchParams.get('token') === TOKEN) {
-      u.searchParams.delete('token'); const rest = u.searchParams.toString();
-      res.writeHead(302, { 'Set-Cookie': `ct_token=${TOKEN}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`, Location: '/' + (rest ? '?' + rest : '') });
-      return res.end();
-    }
-    if (!cookieOk) { res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Hiányzó token – nyisd meg a szerver által kiírt linket.'); }
-  }
+  if (!guard(req, res, u)) return;
   try {
-    if (u.pathname === '/api/health') return json(res, 200, { ok: true, version: VERSION, pid: process.pid, claude: !!findClaude(), login: fs.existsSync(path.join(HOME, '.claude', '.credentials.json')) || !!process.env.ANTHROPIC_API_KEY, runs: runs.size, agent: !!agent });
+    if (u.pathname === '/api/health') return json(res, 200, { ok: true, version: VERSION, pid: process.pid, claude: !!findClaude(), login: fs.existsSync(path.join(HOME, '.claude', '.credentials.json')) || !!process.env.ANTHROPIC_API_KEY, runs: runs.size, agent: !!agent, auth: authState(req) });
     if (u.pathname === '/api/projects') return json(res, 200, projects());
     if (u.pathname === '/api/browse') return json(res, 200, browse(u.searchParams.get('path')));
     if (u.pathname === '/api/sessions') return json(res, 200, listSessions(u.searchParams.get('cwd') || HOME));
