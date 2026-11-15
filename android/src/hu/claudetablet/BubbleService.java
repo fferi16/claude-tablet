@@ -57,6 +57,15 @@ public class BubbleService extends Service {
     static final String CH = "bubble";
     static final String ACTION_STOP = "hu.claudetablet.STOP";
     static final String ACTION_TEXT = "hu.claudetablet.TEXT";
+    static final String ACTION_IMAGE = "hu.claudetablet.IMAGE";
+    static final String ACTION_LISTEN = "hu.claudetablet.LISTEN";
+    /** gyors gombok alapértéke – soronként: Felirat | utasítás (a beállításokban szerkeszthető) */
+    static final String DEFAULT_CHIPS =
+            "Foglald össze | Foglald össze röviden.\n" +
+            "Fordítsd le | Fordítsd le magyarra (ha már magyar, akkor angolra). Csak a fordítást add vissza.\n" +
+            "Magyarázd el | Magyarázd el egyszerűen, röviden.\n" +
+            "Javítsd | Javítsd ki a helyesírást és a fogalmazást. Csak a javított szöveget add vissza, semmi mást.\n" +
+            "Mi ez? | Mi ez? Röviden.";
     static volatile boolean running = false;
     static volatile BubbleService inst;
 
@@ -82,7 +91,11 @@ public class BubbleService extends Service {
     String lastBlock = "";
     /** más appban kijelölt szöveg (szövegkijelölés menü → Claude) */
     String sel;
+    /** megosztott kép (a szerverre feltöltve) */
+    String img;
     TextView selView;
+    LinearLayout chips;
+    String chipsShown;
 
     // ------------------------------------------------------------------ életciklus
 
@@ -111,6 +124,8 @@ public class BubbleService extends Service {
         if (bubble == null) { buildBubble(); buildPanel(); }
         running = true;
         if (intent != null && ACTION_TEXT.equals(intent.getAction())) setSelection(intent.getStringExtra("text"));
+        if (intent != null && ACTION_IMAGE.equals(intent.getAction())) setImage(intent.getStringExtra("path"));
+        if (intent != null && ACTION_LISTEN.equals(intent.getAction())) { showPanel(); if (!busy && !listening) startRec(); }
         prefs.edit().putBoolean("on", true).apply();
         return START_STICKY;
     }
@@ -304,28 +319,23 @@ public class BubbleService extends Service {
         selView.setMaxLines(3);
         selView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         selView.setVisibility(View.GONE);
-        selView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { setSelection(null); } });
+        selView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { img = null; setSelection(null); } });
         LinearLayout.LayoutParams svl = new LinearLayout.LayoutParams(-1, -2);
         svl.topMargin = dp(4);
         panel.addView(selView, svl);
 
         // gyors gombok
-        LinearLayout chips = new LinearLayout(this);
+        chips = new LinearLayout(this);
         chips.setGravity(Gravity.CENTER_VERTICAL);
-        chip(chips, "Foglald össze", "Foglald össze röviden.", "Foglald össze röviden, ami a képernyőn van.");
-        chip(chips, "Fordítsd le", "Fordítsd le magyarra (ha már magyar, akkor angolra). Csak a fordítást add vissza.",
-                "Fordítsd le magyarra a képernyőn lévő fő szöveget. Csak a fordítást add vissza.");
-        chip(chips, "Magyarázd el", "Magyarázd el egyszerűen, röviden.", "Magyarázd el röviden, mit látok a képernyőn.");
-        chip(chips, "Javítsd", "Javítsd ki a helyesírást és a fogalmazást. Csak a javított szöveget add vissza, semmi mást.", null);
-        chip(chips, "Mi ez?", "Mi ez? Röviden.", "Mi ez, amit a képernyőn látok? Röviden.");
-        TextView copy = btn("📋", new View.OnClickListener() { public void onClick(View v) { copyAnswer(); } });
-        chips.addView(copy);
         android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
         hs.addView(chips);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
         hl.topMargin = dp(6);
         panel.addView(hs, hl);
+        buildChips();
+        TextView copy = btn("📋", new View.OnClickListener() { public void onClick(View v) { copyAnswer(); } });
+        copyBtn = copy;
 
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -339,6 +349,13 @@ public class BubbleService extends Service {
         input.setOnEditorActionListener(new TextView.OnEditorActionListener() { public boolean onEditorAction(TextView v, int id, android.view.KeyEvent ev) { sendInput(); return true; } });
         input.setOnTouchListener(new View.OnTouchListener() { public boolean onTouch(View v, MotionEvent e) { if (e.getActionMasked() == MotionEvent.ACTION_DOWN) focusInput(true); return false; } });
         row.addView(input, new LinearLayout.LayoutParams(0, -2, 1));
+        row.addView(btn("📎", new View.OnClickListener() { public void onClick(View v) {
+            if (busy) return;
+            focusInput(false);
+            Intent i = new Intent(BubbleService.this, ProcessTextActivity.class).setAction(ProcessTextActivity.ACTION_PICK);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try { startActivity(i); } catch (Exception e) { setStatus("Nem nyitható a képválasztó"); }
+        } }));
         bMic = btn("🎤", new View.OnClickListener() { public void onClick(View v) { if (listening) stopRec(); else startRec(); } });
         bSend = btn("➤", new View.OnClickListener() { public void onClick(View v) { if (busy) stopRun(); else sendInput(); } });
         row.addView(bMic); row.addView(bSend);
@@ -378,6 +395,7 @@ public class BubbleService extends Service {
     }
 
     void showPanel() {
+        if (chips != null) buildChips();
         if (panelShown) return;
         placePanel();
         try { wm.addView(panel, pp); panelShown = true; } catch (Exception e) { toast("Panel hiba: " + e.getMessage()); }
@@ -472,12 +490,31 @@ public class BubbleService extends Service {
 
     // ------------------------------------------------------------------ küldés a szervernek
 
-    void chip(LinearLayout row, String label, final String forSel, final String forScreen) {
+    TextView copyBtn;
+
+    /** gyors gombok újraépítése a beállításokból (prefs "chips") */
+    void buildChips() {
+        String cfg = prefs.getString("chips", DEFAULT_CHIPS);
+        if (cfg.equals(chipsShown)) return;
+        chipsShown = cfg;
+        chips.removeAllViews();
+        for (String line : cfg.split("\n")) {
+            int i = line.indexOf('|');
+            String label = (i < 0 ? line : line.substring(0, i)).trim();
+            String prompt = (i < 0 ? line : line.substring(i + 1)).trim();
+            if (label.isEmpty() || prompt.isEmpty()) continue;
+            chip(chips, label, prompt);
+        }
+        if (copyBtn == null) copyBtn = btn("📋", new View.OnClickListener() { public void onClick(View v) { copyAnswer(); } });
+        chips.addView(copyBtn);
+    }
+
+    void chip(LinearLayout row, String label, final String prompt) {
         TextView b = btn(label, new View.OnClickListener() { public void onClick(View v) {
             if (busy) return;
-            if (sel != null) ask(forSel, false);
-            else if (forScreen != null) ask(forScreen, true);
-            else setStatus("Előbb jelölj ki szöveget (kijelölés → Claude)");
+            // kijelölt szöveg / kép van: arra vonatkozik; különben a képernyőre
+            if (sel != null || img != null) ask(prompt, false);
+            else ask(prompt + " (A képernyőn látható tartalomról van szó.)", true);
         } });
         b.setTextSize(14);
         row.addView(b);
@@ -485,11 +522,22 @@ public class BubbleService extends Service {
 
     void setSelection(String t) {
         sel = t == null || t.trim().isEmpty() ? null : t.trim();
-        if (sel == null) { selView.setVisibility(View.GONE); return; }
-        selView.setText("✂ " + sel.replace('\n', ' ') + "   ✕");
+        showAttach();
+        if (sel != null) setStatus("Kijelölt szöveg – mit csináljak vele?");
+    }
+
+    void setImage(String path) {
+        img = path == null || path.isEmpty() ? null : path;
+        showAttach();
+        if (img != null) setStatus("Kép csatolva – mit csináljak vele?");
+    }
+
+    void showAttach() {
+        if (sel == null && img == null) { selView.setVisibility(View.GONE); return; }
+        String t = (img != null ? "🖼 kép  " : "") + (sel != null ? "✂ " + sel.replace('\n', ' ') : "");
+        selView.setText(t + "   ✕");
         selView.setVisibility(View.VISIBLE);
         showPanel();
-        setStatus("Kijelölt szöveg – mit csináljak vele?");
     }
 
     void copyAnswer() {
@@ -503,8 +551,8 @@ public class BubbleService extends Service {
 
     void sendInput() {
         String t = input.getText().toString().trim();
-        if (t.isEmpty() && sel != null) t = "Mit gondolsz erről?";
-        ask(t, prefs.getBoolean("screen", true) && sel == null);
+        if (t.isEmpty() && (sel != null || img != null)) t = img != null ? "Mi ez? Röviden." : "Mit gondolsz erről?";
+        ask(t, prefs.getBoolean("screen", true) && sel == null && img == null);
     }
 
     void ask(String q, final boolean screen) {
@@ -512,9 +560,13 @@ public class BubbleService extends Service {
         String shown = q;
         if (sel != null) {
             q = q + "\n\nKijelölt szöveg:\n\"\"\"\n" + sel + "\n\"\"\"";
-            shown = q.substring(0, q.indexOf("\n\nKijelölt")) + "  (✂ kijelölt szöveg)";
-            setSelection(null);
+            shown += "  (✂ kijelölt szöveg)";
         }
+        if (img != null) {
+            q = q + "\n\nCsatolt kép (nézd meg Read-dal): " + img;
+            shown += "  (🖼 kép)";
+        }
+        if (sel != null || img != null) { img = null; setSelection(null); }
         final String text = q;
         focusInput(false);
         input.setText("");

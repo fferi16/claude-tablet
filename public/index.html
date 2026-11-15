@@ -189,6 +189,7 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
       <span style="color:var(--muted)">▾</span>
     </button>
     <button class="newbtn" onclick="newChat()">＋ Új beszélgetés</button>
+    <button class="chip" id="chipsBtn" style="display:none;margin:0 12px 8px;text-align:center" onclick="drawer(false);chipsTa.value=ClaudeApp.getChips();chipsDlg.showModal()">⚡ Lebegő gomb: gyors gombok</button>
     <button class="chip" id="setupBtn" style="display:none;margin:0 12px 8px;text-align:center" onclick="drawer(false);openSetup()">✓ Beállítás-ellenőrző</button>
     <div class="sect">Korábbi beszélgetések <button onclick="loadSessions()">↻</button></div>
     <div class="list" id="sessions"></div>
@@ -260,6 +261,15 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
 <div class="rail r none" id="railR" onclick="railInfo('r')" title="Kontextus"><div class="tr"><div class="fl"></div></div></div>
 <div class="banner" id="banner" hidden><i></i><span>A motor nem fut – újracsatlakozás…</span></div>
 
+<dialog id="chipsDlg">
+  <div style="display:flex;align-items:center;padding:14px 16px"><b style="flex:1;font-size:17px">Lebegő gomb – gyors gombok</b>
+    <button class="ib" onclick="chipsDlg.close()" aria-label="Bezár">✕</button></div>
+  <div style="padding:0 16px;color:var(--dim);font-size:13px">Soronként egy gomb: <b>Felirat | utasítás</b>. Ha van kijelölt szöveg vagy kép, arra vonatkozik, különben a képernyőre.</div>
+  <textarea id="chipsTa" rows="9" style="box-sizing:border-box;width:calc(100% - 32px);margin:10px 16px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font:14px/1.5 inherit"></textarea>
+  <div style="display:flex;gap:8px;padding:0 16px 16px;justify-content:flex-end">
+    <button class="fix chip" onclick="chipsTa.value='';ClaudeApp.setChips('');chipsTa.value=ClaudeApp.getChips();toast('Alapértelmezett visszaállítva')">Alapértelmezett</button>
+    <button class="fix chip" onclick="ClaudeApp.setChips(chipsTa.value);chipsDlg.close();toast('Mentve – a panel következő megnyitásakor frissül')">Mentés</button></div>
+</dialog>
 <dialog id="setup">
   <div style="display:flex;align-items:center;padding:14px 16px"><b style="flex:1;font-size:17px">Beállítás-ellenőrző</b>
     <button class="ib" onclick="setupDlg.close()" aria-label="Bezár">✕</button></div>
@@ -978,6 +988,7 @@ async function checkUpdate(force) {
 (function () {
   const A = window.ClaudeApp; if (!A || !A.perms) return;
   document.getElementById('setupBtn').style.display = '';
+  if (A.getChips) document.getElementById('chipsBtn').style.display = '';
   setTimeout(async () => {
     const items = await setupItems();
     if (!localStorage.getItem('ct_setupSeen') && items.some(i => !i.ok)) { localStorage.setItem('ct_setupSeen', '1'); openSetup(); }

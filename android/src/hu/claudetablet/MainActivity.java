@@ -800,6 +800,14 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public boolean bubbleOn() { return BubbleService.running; }
+        @JavascriptInterface public String getChips() {
+            return getSharedPreferences("bubble", MODE_PRIVATE).getString("chips", BubbleService.DEFAULT_CHIPS);
+        }
+        @JavascriptInterface public void setChips(String v) {
+            SharedPreferences.Editor e = getSharedPreferences("bubble", MODE_PRIVATE).edit();
+            if (v == null || v.trim().isEmpty()) e.remove("chips"); else e.putString("chips", v.trim());
+            e.apply();
+        }
         @JavascriptInterface public int appVersion() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
         }
