@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -126,10 +126,12 @@ function listSessions(cwd) {
   try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')); } catch { return []; }
   return files.map(f => {
     const fp = path.join(dir, f), st = fs.statSync(fp);
-    let title = '', count = 0;
+    let title = '', count = 0, custom = '';
     try {
       const lines = fs.readFileSync(fp, 'utf8').split('\n');
       for (const l of lines) {
+        // a Claude app saját címe (átnevezésnél a legutolsó számít)
+        if (l.includes('"type":"custom-title"')) { try { custom = JSON.parse(l).customTitle || custom; } catch {} continue; }
         if (!l.includes('"type":"user"')) continue;
         let o; try { o = JSON.parse(l); } catch { continue; }
         if (o.type !== 'user' || o.isMeta || o.isSidechain) continue;
@@ -139,8 +141,9 @@ function listSessions(cwd) {
       }
     } catch {}
     // live: az utolsó 2 percben íródott – valószínűleg épp nyitva van máshol (pl. a gépen a Claude appban)
-    return { id: f.slice(0, -6), title: title || '(üres)', mtime: st.mtimeMs, count, live: Date.now() - st.mtimeMs < 120000 };
-  }).filter(s => s.count > 0 && !s.title.startsWith('[Lebegő Claude-gomb')).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
+    if (title.startsWith('[Lebegő Claude-gomb')) count = 0; // a lebegő gomb belső beszélgetései nem kellenek a listába
+    return { id: f.slice(0, -6), title: custom || title || '(üres)', mtime: st.mtimeMs, count, live: Date.now() - st.mtimeMs < 120000 };
+  }).filter(s => s.count > 0).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
 }
 
 function history(cwd, id) {
@@ -411,7 +414,73 @@ function projects() {
 // ---- A gépen futó Claude Code projektjei (~/.claude/projects) ----
 // Így a máshol (Claude asztali app, terminál, VS Code) indított beszélgetések is látszanak és folytathatók.
 // Mappánként a legfrissebb beszélgetés első sorából vesszük a valódi munkamappát (cwd).
-const SKIP_PROJ = /[\\/](AppData[\\/]Local[\\/]Temp|scratch-workspaces|\.claude[\\/]worktrees)([\\/]|$)/i;
+// ideiglenes mappák (Windows Temp, Claude scratch, worktree-k, a tableten /tmp) nem kellenek a listákba
+const SKIP_PROJ = /[\\/](AppData[\\/]Local[\\/]Temp|scratch-workspaces|\.claude[\\/]worktrees)([\\/]|$)|^\/tmp(\/|$)/i;
+function skipProject(cwd) { return !cwd || SKIP_PROJ.test(cwd) || !isDir(cwd); }
+
+// ---- Az összes beszélgetés, projekttől függetlenül, időrendben (mint a Claude asztali app oldalsávja) ----
+// A fájloknak csak az elejét/végét olvassuk (cím, munkamappa), és megjegyezzük, amíg nem változnak:
+// a gépen több száz MB beszélgetés is lehet.
+const sumCache = new Map(); // fájl -> { m, title, cwd, bubble }
+function jsonStr(s) { try { return JSON.parse('"' + s + '"'); } catch { return s; } }
+function readSlice(fp, pos, len) {
+  const fd = fs.openSync(fp, 'r');
+  try { const b = Buffer.alloc(len), n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n).toString('utf8'); }
+  finally { fs.closeSync(fd); }
+}
+const CUSTOM_RE = /"customTitle":"((?:[^"\\]|\\.)*)"/g;
+function sessionSummary(fp, st) {
+  const c = sumCache.get(fp);
+  if (c && c.m === st.mtimeMs) return c;
+  const CH = 262144;
+  const head = readSlice(fp, 0, Math.min(CH, st.size));
+  const tail = st.size > CH ? readSlice(fp, st.size - CH, CH) : head;
+  let custom = null; // a Claude app saját címe: a legutolsó számít (átnevezés)
+  for (const m of tail.matchAll(CUSTOM_RE)) custom = m[1];
+  if (!custom) for (const m of head.matchAll(CUSTOM_RE)) custom = m[1];
+  let first = null, cwd = null;
+  for (const l of head.split('\n')) {
+    if (!cwd) { const m = l.match(/"cwd":"((?:[^"\\]|\\.)*)"/); if (m) cwd = jsonStr(m[1]); }
+    if (!first && l.includes('"type":"user"')) {
+      try {
+        const o = JSON.parse(l);
+        if (o.type === 'user' && !o.isMeta && !o.isSidechain) {
+          const t = cleanUserText(textOf(o.message?.content));
+          if (t && !t.startsWith('<')) first = t;
+        }
+      } catch {}
+    }
+    if (first && cwd) break;
+  }
+  const r = { m: st.mtimeMs, cwd, bubble: !!first && first.startsWith('[Lebegő Claude-gomb'),
+              title: custom ? jsonStr(custom) : first ? first.slice(0, 90) : null };
+  sumCache.set(fp, r);
+  return r;
+}
+function allSessions(limit = 60) {
+  const root = path.join(HOME, '.claude', 'projects'), files = [];
+  let dirs = [];
+  try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()); } catch {}
+  for (const d of dirs) {
+    const dir = path.join(root, d.name);
+    let names = [];
+    try { names = fs.readdirSync(dir); } catch {}
+    for (const f of names) {
+      if (!f.endsWith('.jsonl') || !UUID.test(f.slice(0, -6))) continue;
+      try { const fp = path.join(dir, f); files.push({ fp, dir, id: f.slice(0, -6), st: fs.statSync(fp) }); } catch {}
+    }
+  }
+  files.sort((a, b) => b.st.mtimeMs - a.st.mtimeMs);
+  const out = [];
+  for (const x of files) {
+    if (out.length >= limit) break;
+    let s; try { s = sessionSummary(x.fp, x.st); } catch { continue; }
+    // csak olyat, amit a tablet meg is tud nyitni (az előzmény a projekt mappájából töltődik)
+    if (!s.title || s.bubble || skipProject(s.cwd) || projDir(s.cwd) !== x.dir) continue;
+    out.push({ id: x.id, title: s.title, mtime: x.st.mtimeMs, cwd: s.cwd, live: Date.now() - x.st.mtimeMs < 120000 });
+  }
+  return out;
+}
 let ccCache = { t: 0, v: [] };
 function readCwd(fp) {
   try {
@@ -437,7 +506,7 @@ function claudeProjects() {
     if (!newest) continue;
     const cwd = readCwd(path.join(dir, newest.f));
     // csak létező mappa, és csak ha a beszélgetéslista ugyanide mutat (projDir)
-    if (!cwd || SKIP_PROJ.test(cwd) || !isDir(cwd) || projDir(cwd) !== dir) continue;
+    if (skipProject(cwd) || projDir(cwd) !== dir) continue;
     out.push({ path: cwd, mtime: newest.m });
   }
   out.sort((a, b) => b.mtime - a.mtime);
@@ -567,6 +636,7 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/health') return json(res, 200, { ok: true, version: VERSION, pid: process.pid, claude: !!findClaude(), login: fs.existsSync(path.join(HOME, '.claude', '.credentials.json')) || !!process.env.ANTHROPIC_API_KEY, runs: runs.size, agent: !!agent, auth: authState(req) });
     if (u.pathname === '/api/projects') return json(res, 200, projects());
     if (u.pathname === '/api/browse') return json(res, 200, browse(u.searchParams.get('path')));
+    if (u.pathname === '/api/allsessions') return json(res, 200, allSessions());
     if (u.pathname === '/api/sessions') return json(res, 200, listSessions(u.searchParams.get('cwd') || HOME));
     if (u.pathname === '/api/history') {
       const id = u.searchParams.get('id');
