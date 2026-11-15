@@ -205,7 +205,7 @@ const EN = {
 'Parancs':'Command','Olvasás':'Read','Szerkesztés':'Edit','Írás':'Write','Keresés':'Search','Fájlkeresés':'Find files','Weblap':'Web page','Webkeresés':'Web search',
 'Al-ügynök':'Subagent','Teendők':'To-dos','Miben segíthetek?':'How can I help?','Projekt:':'Project:','Projekt':'Project',
 'Még nincs beszélgetés ebben a projektben.':'No chats in this project yet.','Beszélgetés':'Chat','Várj, még tart a feltöltés…':'Wait, upload in progress…',
-'Válassz projektet':'Choose a project','Legutóbbiak':'Recent','Saját mappa':'Home folders','Tallózás…':'Browse…','Eltávolítás':'Remove','Már csatolva':'Already attached',
+'Válassz projektet':'Choose a project','Legutóbbiak':'Recent','Saját mappa':'Home folders','Claude Code projektek ezen a gépen':'Claude Code projects on this machine','most aktív':'active now','Ez a beszélgetés most máshol is nyitva van (pl. a gépen a Claude appban). Ha innen folytatod, a két hely nem látja egymás új üzeneteit. Folytatod?':'This conversation is open somewhere else right now (e.g. in the Claude app on the computer). If you continue here, the two places will not see each other’s new messages. Continue?','Tallózás…':'Browse…','Eltávolítás':'Remove','Már csatolva':'Already attached',
 'A vágólap üres':'Clipboard is empty','Nyomd hosszan a beviteli mezőt, és válaszd a Beillesztést':'Long-press the input field and choose Paste','Üres mappa.':'Empty folder.',
 '📕 PDF – csatold, és Claude elolvassa.':'📕 PDF – attach it and Claude will read it.','Nem sikerült':'Failed','A futó válasz után újraindul…':'Restarting after the current reply…',
 'Újraindítás…':'Restarting…','Diktálás leállítása':'Stop dictation','Hallgatlak… beszélj':'Listening… speak','Nem hallottam semmit.':'I didn\'t hear anything.',
@@ -479,7 +479,7 @@ function copyCode(b) {
 function nearBottom() { return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160; }
 function scrollDown(force) { if (force || nearBottom()) chat.scrollTop = chat.scrollHeight; }
 function add(html, cls) { const d = document.createElement('div'); d.className = 'msg ' + (cls || ''); d.innerHTML = html; chat.append(d); return d; }
-function base(p) { return p ? p.split('/').filter(Boolean).pop() || '/' : '—'; }
+function base(p) { return p ? p.split(/[\\/]/).filter(Boolean).pop() || p : '—'; } // Windows-útvonalra is (PC-s motor)
 function ago(ms) {
   const s = (Date.now() - ms) / 1000;
   if (s < 60) return tr('most'); if (s < 3600) return Math.floor(s / 60) + tr(' perce'); if (s < 86400) return Math.floor(s / 3600) + tr(' órája');
@@ -559,10 +559,11 @@ async function loadSessions() {
   if (!state.cwd) return;
   let list = await api('/api/sessions?cwd=' + encodeURIComponent(state.cwd));
   if (!Array.isArray(list)) list = [];
+  state.live = new Set(list.filter(s => s.live).map(s => s.id)); // máshol (pl. a gépen) épp nyitott beszélgetések
   el.innerHTML = list.length ? '' : '<div style="color:var(--muted);padding:12px;font-size:14px">Még nincs beszélgetés ebben a projektben.</div>';
   for (const s of list) {
     const b = document.createElement('button'); b.className = 'sess' + (s.id === state.session ? ' on' : '');
-    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)} · ${s.count} ${LANG === 'en' && s.count === 1 ? 'message' : tr('üzenet')}</div>`;
+    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)} · ${s.count} ${LANG === 'en' && s.count === 1 ? 'message' : tr('üzenet')}${s.live ? ` · <span style="color:var(--ok)">● ${tr('most aktív')}</span>` : ''}</div>`;
     b.onclick = () => openSession(s.id, s.title);
     el.append(b);
   }
@@ -601,6 +602,8 @@ async function onSend() {
   const typed = input.value.trim();
   if ((!typed && !atts.length) || !state.cwd) return;
   if (atts.some(a => a.status === 'up')) return toast('Várj, még tart a feltöltés…');
+  if (state.session && state.live && state.live.has(state.session) &&
+      !confirm(tr('Ez a beszélgetés most máshol is nyitva van (pl. a gépen a Claude appban). Ha innen folytatod, a két hely nem látja egymás új üzeneteit. Folytatod?'))) return;
   const sent = atts.filter(a => a.status === 'ok');
   const text = (typed || tr('Nézd meg a csatolt fájlokat.')) + (sent.length ? `\n\n${ATT_HDR}\n` + sent.map(a => '- ' + a.path).join('\n') : '');
   const savedAtts = atts; atts = []; renderTray();
@@ -699,6 +702,7 @@ async function openPicker() {
   const sec = t => { const d = document.createElement('div'); d.className = 'sect'; d.textContent = t; el.append(d); };
   const row = (path, sub) => { const b = document.createElement('button'); b.innerHTML = `📁 <span><b>${esc(base(path))}</b><br><small style="color:var(--muted)">${esc(sub || path)}</small></span>`; b.onclick = () => choose(path); el.append(b); };
   if (p.recent.length) { sec('Legutóbbiak'); p.recent.forEach(x => row(x)); }
+  if (p.claude && p.claude.length) { sec('Claude Code projektek ezen a gépen'); p.claude.forEach(x => row(x)); }
   sec('Saját mappa'); p.dirs.forEach(x => row(x));
   const b = document.createElement('button'); b.innerHTML = '🔎 <b>Tallózás…</b>'; b.onclick = () => browse(state.cwd || p.home); el.append(b);
   $('#newdir').hidden = true;

@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -138,7 +138,8 @@ function listSessions(cwd) {
         count++; if (!title) title = t.slice(0, 90);
       }
     } catch {}
-    return { id: f.slice(0, -6), title: title || '(üres)', mtime: st.mtimeMs, count };
+    // live: az utolsó 2 percben íródott – valószínűleg épp nyitva van máshol (pl. a gépen a Claude appban)
+    return { id: f.slice(0, -6), title: title || '(üres)', mtime: st.mtimeMs, count, live: Date.now() - st.mtimeMs < 120000 };
   }).filter(s => s.count > 0 && !s.title.startsWith('[Lebegő Claude-gomb')).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
 }
 
@@ -168,14 +169,15 @@ function history(cwd, id) {
     if (!lines[i].includes('"usage"')) continue;
     try { const o = JSON.parse(lines[i]); if (o.type === 'assistant' && !o.isSidechain && o.message?.usage) last = o; } catch {}
   }
-  if (last) out.push({ kind: 'ctx', tokens: ctxTokens(last.message.usage), model: last.message.model, window: ctxWindow(last.message.model) });
+  if (last) out.push({ kind: 'ctx', tokens: ctxTokens(last.message.usage), model: last.message.model, window: ctxWindow(last.message.model, ctxTokens(last.message.usage)) });
   return out;
 }
 function ctxTokens(u) { return (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.output_tokens || 0); }
-function ctxWindow(model) {
+function ctxWindow(model, tokens) {
   const w = (loadCfg().ctxWin || {});
   if (model && w[model]) return w[model];
-  return /\[1m\]/i.test(model || '') ? 1000000 : 200000;
+  // ismeretlen modell: ha már most több a kontextus 200k-nál, biztosan nagy (1M) ablakú
+  return /\[1m\]/i.test(model || '') || (tokens || 0) > 200000 ? 1000000 : 200000;
 }
 // ---- 5 órás / heti limit (claude.ai előfizetés), 60 mp-es gyorsítótárral ----
 let usageCache = { t: 0, data: null };
@@ -402,7 +404,45 @@ function projects() {
       .map(d => path.join(HOME, d.name));
   } catch {}
   const recent = (cfg.recent || []).filter(isDir);
-  return { home: HOME, recent, dirs: [HOME, ...dirs.filter(d => !recent.includes(d))] };
+  const claude = claudeProjects().map(x => x.path).filter(p => !recent.includes(p));
+  return { home: HOME, recent, claude, dirs: [HOME, ...dirs.filter(d => !recent.includes(d) && !claude.includes(d))] };
+}
+
+// ---- A gépen futó Claude Code projektjei (~/.claude/projects) ----
+// Így a máshol (Claude asztali app, terminál, VS Code) indított beszélgetések is látszanak és folytathatók.
+// Mappánként a legfrissebb beszélgetés első sorából vesszük a valódi munkamappát (cwd).
+const SKIP_PROJ = /[\\/](AppData[\\/]Local[\\/]Temp|scratch-workspaces|\.claude[\\/]worktrees)([\\/]|$)/i;
+let ccCache = { t: 0, v: [] };
+function readCwd(fp) {
+  try {
+    const fd = fs.openSync(fp, 'r'), b = Buffer.alloc(262144), n = fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd);
+    const m = b.subarray(0, n).toString('utf8').match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+    return m ? JSON.parse('"' + m[1] + '"') : null;
+  } catch { return null; }
+}
+function claudeProjects() {
+  if (Date.now() - ccCache.t < 15000) return ccCache.v;
+  const root = path.join(HOME, '.claude', 'projects'), out = [];
+  let dirs = [];
+  try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()); } catch {}
+  for (const d of dirs) {
+    const dir = path.join(root, d.name);
+    let newest = null;
+    try {
+      for (const f of fs.readdirSync(dir)) if (f.endsWith('.jsonl')) {
+        const st = fs.statSync(path.join(dir, f));
+        if (!newest || st.mtimeMs > newest.m) newest = { f, m: st.mtimeMs };
+      }
+    } catch {}
+    if (!newest) continue;
+    const cwd = readCwd(path.join(dir, newest.f));
+    // csak létező mappa, és csak ha a beszélgetéslista ugyanide mutat (projDir)
+    if (!cwd || SKIP_PROJ.test(cwd) || !isDir(cwd) || projDir(cwd) !== dir) continue;
+    out.push({ path: cwd, mtime: newest.m });
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  ccCache = { t: Date.now(), v: out.slice(0, 40) };
+  return ccCache.v;
 }
 function browse(p) {
   p = path.resolve(p || HOME);
