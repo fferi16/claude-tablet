@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -96,7 +96,7 @@ function listSessions(cwd) {
       }
     } catch {}
     return { id: f.slice(0, -6), title: title || '(üres)', mtime: st.mtimeMs, count };
-  }).filter(s => s.count > 0).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
+  }).filter(s => s.count > 0 && !s.title.startsWith('[Lebegő Claude-gomb')).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
 }
 
 function history(cwd, id) {
@@ -290,7 +290,7 @@ async function bubble(req, res, body) {
   }
   try { res.write(JSON.stringify({ kind: 'shot', ok: !!shot }) + '\n'); } catch {}
   const pre = '[Lebegő Claude-gomb: a felhasználó a tableten épp egy másik appot használ, és onnan kérdez (általában diktálva). ' +
-    'Válaszolj röviden, magyarul, felolvasásra alkalmasan (kevés markdown, nincs táblázat/kódblokk, hacsak nem kéri). ' +
+    'Válaszolj röviden, a felhasználó nyelvén (amin kérdez), felolvasásra alkalmasan (kevés markdown, nincs táblázat/kódblokk, hacsak nem kéri). ' +
     (shot ? `A kérés pillanatában készült képernyőkép: ${shot} – ha a kérés a képernyőre vonatkozik, nézd meg Read-dal. ` :
       (body.screen ? 'Képernyőképet most nem sikerült készíteni (ADB nem elérhető). ' : '')) +
     'A tabletet a `tablet` paranccsal vezérelheted: `tablet text` (a képernyő szövegei koordinátákkal – olcsóbb, mint a kép), `tablet clicktext "Felirat"`, tap X Y, swipe, type "szöveg" (ékezet is), key BACK|HOME|ENTER, open app, shot. Csak akkor nyúlj hozzá, ha a felhasználó cselekvést kér.]\n\n';

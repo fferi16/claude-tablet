@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.7.1",
+  "versionCode": 12,
+  "versionName": "1.8.0",
   "apk": "https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk",
-  "notes": "Kép küldése a lebegő gombnak (📎 vagy Megosztás → Lebegő Claude), saját gyors gombok, gyorsbeállítás-csempe"
+  "notes": "Angol felület / English UI (automatikus vagy a menüben választható)"
 }

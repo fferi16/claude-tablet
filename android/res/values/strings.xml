@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Claude Tablet</string>
-    <string name="share_label">Küldés Claude-nak</string>
-    <string name="agent_label">Claude Tablet – tabletvezérlés</string>
-    <string name="agent_desc">Lehetővé teszi, hogy Claude a kérésedre képernyőképet készítsen, kiolvassa a képernyő szövegét, koppintson és gépeljen. Csak a helyi Claude Tablet motornak továbbít, és csak akkor, ha te kérsz valamit.</string>
+    <string name="share_label">Send to Claude</string>
+    <string name="bubble_label">Floating Claude</string>
+    <string name="agent_label">Claude Tablet – tablet control</string>
+    <string name="agent_desc">Lets Claude take a screenshot, read the text on screen, tap and type when you ask it to. Data only goes to the local Claude Tablet engine, and only when you make a request.</string>
 </resources>

@@ -25,9 +25,10 @@ public class ProcessTextActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        L.init(this);
         Intent in = getIntent();
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Kapcsold be a lebegő Claude-gombot a Claude Tablet appban", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, L.t("Kapcsold be a lebegő Claude-gombot a Claude Tablet appban"), Toast.LENGTH_LONG).show();
             done(); return;
         }
         if (BubbleService.ACTION_LISTEN.equals(in.getAction())) {
@@ -37,7 +38,7 @@ public class ProcessTextActivity extends Activity {
         if (ACTION_PICK.equals(in.getAction())) {
             // a lebegő panel 📎 gombja: képválasztó, az eredmény az onActivityResult-ba jön
             Intent p = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);
-            try { startActivityForResult(Intent.createChooser(p, "Kép választása"), 1); } catch (Exception e) { done(); }
+            try { startActivityForResult(Intent.createChooser(p, L.t("Kép választása")), 1); } catch (Exception e) { done(); }
             return;
         }
         String type = in.getType();
@@ -64,12 +65,12 @@ public class ProcessTextActivity extends Activity {
     }
 
     void sendImage(final Uri u) {
-        Toast.makeText(this, "Kép küldése Claude-nak…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, L.t("Kép küldése Claude-nak…"), Toast.LENGTH_SHORT).show();
         final String name = nameOf(u);
         new Thread(new Runnable() { public void run() {
             final String path = upload(u, name);
             runOnUiThread(new Runnable() { public void run() {
-                if (path == null) Toast.makeText(ProcessTextActivity.this, "A kép nem küldhető – fut a motor?", Toast.LENGTH_LONG).show();
+                if (path == null) Toast.makeText(ProcessTextActivity.this, L.t("A kép nem küldhető – fut a motor?"), Toast.LENGTH_LONG).show();
                 else toBubble(new Intent(ProcessTextActivity.this, BubbleService.class).setAction(BubbleService.ACTION_IMAGE).putExtra("path", path));
                 done();
             } });

@@ -96,6 +96,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        L.init(this);
         getWindow().getDecorView().setBackgroundColor(C_BG);
         root = new FrameLayout(this);
         root.setBackgroundColor(C_BG);
@@ -280,18 +281,18 @@ public class MainActivity extends Activity {
                     Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, cur == null || cur.isEmpty() ? me : cur + ":" + me);
                     Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1);
                 }
-                toast("Tabletvezérlés bekapcsolva");
+                toast(L.t("Tabletvezérlés bekapcsolva"));
                 return;
             } catch (Exception e) {}
         }
-        toast("Kapcsold be: Telepített alkalmazások → Claude Tablet – tabletvezérlés");
+        toast(L.t("Kapcsold be: Telepített alkalmazások → Claude Tablet – tabletvezérlés"));
         try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); } catch (Exception e) {}
     }
 
     void toggleBubble(boolean on) {
         if (!on) { if (BubbleService.running) BubbleService.stop(this); else getSharedPreferences("bubble", MODE_PRIVATE).edit().putBoolean("on", false).apply(); return; }
         if (!Settings.canDrawOverlays(this)) {
-            toast("Engedélyezd a „Megjelenítés más alkalmazások felett” jogot, majd kapcsold be újra");
+            toast(L.t("Engedélyezd a „Megjelenítés más alkalmazások felett” jogot, majd kapcsold be újra"));
             try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()))); } catch (Exception e) {}
             return;
         }
@@ -302,7 +303,7 @@ public class MainActivity extends Activity {
     void launchPackage(String pkg) {
         final Intent i = pkg == null ? null : getPackageManager().getLaunchIntentForPackage(pkg);
         if (i == null) {
-            web.evaluateJavascript("window.add&&add(" + JSONObject.quote("Nincs ilyen app a tableten: " + pkg) + ",'err')", null);
+            web.evaluateJavascript("window.add&&add(" + JSONObject.quote(L.t("Nincs ilyen app a tableten: ") + pkg) + ",'err')", null);
             return;
         }
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -315,7 +316,7 @@ public class MainActivity extends Activity {
         }
         // PiP-be ugrás után nyitjuk az appot, így az kerül alá teljes képernyőn
         ui.postDelayed(new Runnable() { public void run() {
-            try { startActivity(i); } catch (Exception e) { toast("Nem indítható: " + e.getMessage()); }
+            try { startActivity(i); } catch (Exception e) { toast(L.t("Nem indítható: ") + e.getMessage()); }
         } }, pip ? 350 : 0);
     }
 
@@ -412,7 +413,7 @@ public class MainActivity extends Activity {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
         } catch (Exception e) {
-            toast("Nem nyitható meg: " + u);
+            toast(L.t("Nem nyitható meg: ") + u);
         }
     }
 
@@ -451,7 +452,7 @@ public class MainActivity extends Activity {
     void startPolling() {
         if (help != null) help.setVisibility(View.GONE);
         splash.setVisibility(View.VISIBLE);
-        setStatus("Claude motor indítása…");
+        setStatus(L.t("Claude motor indítása…"));
         polling = true;
         pollStart = System.currentTimeMillis();
         pollOnce();
@@ -507,7 +508,7 @@ public class MainActivity extends Activity {
             showHelp("timeout");
             return;
         }
-        if (el > 6000) setStatus("Claude motor indítása… (" + (el / 1000) + " mp)");
+        if (el > 6000) setStatus(L.t("Claude motor indítása… (") + (el / 1000) + " mp)");
         ui.postDelayed(new Runnable() { public void run() { pollOnce(); } }, POLL_MS);
     }
 
@@ -528,7 +529,7 @@ public class MainActivity extends Activity {
     boolean tryStartServer() {
         if (!termuxInstalled()) { showHelp("notermux"); return false; }
         if (!hasRunPerm()) {
-            setStatus("Engedély szükséges a Termux parancs futtatásához…");
+            setStatus(L.t("Engedély szükséges a Termux parancs futtatásához…"));
             requestPermissions(new String[]{PERM_RUN}, REQ_RUN);
             return false;
         }
@@ -544,7 +545,7 @@ public class MainActivity extends Activity {
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
-            setStatus("Claude motor indítása…");
+            setStatus(L.t("Claude motor indítása…"));
             return true;
         } catch (SecurityException e) {
             showHelp("perm");
@@ -558,7 +559,7 @@ public class MainActivity extends Activity {
     boolean wakeTermux() {
         Intent launch = getPackageManager().getLaunchIntentForPackage("com.termux");
         if (launch == null) return false;
-        setStatus("A Termux felébresztése…\nHa nem tér vissza magától, lépj vissza a Claude Tablet appba.");
+        setStatus(L.t("A Termux felébresztése…\nHa nem tér vissza magától, lépj vissza a Claude Tablet appba."));
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setClassName("com.termux", "com.termux.app.RunCommandService");
         i.putExtra("com.termux.RUN_COMMAND_PATH", WAKE_SCRIPT);
@@ -579,7 +580,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         if (req == REQ_MIC) {
             if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startRec(pendingLang);
-            else voiceEvent("error", "Nincs mikrofon-engedély. Beállítások → Alkalmazások → Claude Tablet → Engedélyek.");
+            else voiceEvent("error", L.t("Nincs mikrofon-engedély. Beállítások → Alkalmazások → Claude Tablet → Engedélyek."));
             return;
         }
         if (req == REQ_RUN) {
@@ -627,9 +628,9 @@ public class MainActivity extends Activity {
 
     void createChannel() {
         if (Build.VERSION.SDK_INT < 26) return;
-        NotificationChannel ch = new NotificationChannel("claude", "Claude válaszok",
+        NotificationChannel ch = new NotificationChannel("claude", L.t("Claude válaszok"),
                 NotificationManager.IMPORTANCE_HIGH);
-        ch.setDescription("Értesítés, amikor Claude befejezte a választ");
+        ch.setDescription(L.t("Értesítés, amikor Claude befejezte a választ"));
         ch.enableVibration(true);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);
     }
@@ -678,7 +679,7 @@ public class MainActivity extends Activity {
     SpeechRecognizer sr;
     TextToSpeech tts;
     boolean ttsReady;
-    String pendingLang = "hu-HU", pendingSpeak;
+    String pendingLang = null, pendingSpeak;
     long lastLevel;
 
     void voiceEvent(String type, String text) {
@@ -688,7 +689,7 @@ public class MainActivity extends Activity {
 
     void startRec(String lang) {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            voiceEvent("error", "Nincs beszédfelismerő a tableten. Telepítsd/frissítsd a Google appot vagy a Speech Services-t.");
+            voiceEvent("error", L.t("Nincs beszédfelismerő a tableten. Telepítsd/frissítsd a Google appot vagy a Speech Services-t."));
             return;
         }
         if (sr == null) {
@@ -718,7 +719,7 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L);
         try { sr.cancel(); sr.startListening(i); }
-        catch (Exception ex) { voiceEvent("error", "Nem indítható a felismerés: " + ex.getMessage()); }
+        catch (Exception ex) { voiceEvent("error", L.t("Nem indítható a felismerés: ") + ex.getMessage()); }
     }
 
     static String first(Bundle b) {
@@ -728,15 +729,15 @@ public class MainActivity extends Activity {
 
     static String recError(int e) {
         switch (e) {
-            case SpeechRecognizer.ERROR_NO_MATCH: return "Nem értettem, próbáld újra.";
+            case SpeechRecognizer.ERROR_NO_MATCH: return L.t("Nem értettem, próbáld újra.");
             case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: return "Nem hallottam semmit.";
             case SpeechRecognizer.ERROR_NETWORK:
-            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return "Hálózati hiba a felismerésnél.";
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return L.t("Hálózati hiba a felismerésnél.");
             case SpeechRecognizer.ERROR_AUDIO: return "Mikrofonhiba.";
-            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return "Nincs mikrofon-engedély.";
-            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "A felismerő foglalt, próbáld újra.";
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return L.t("Nincs mikrofon-engedély.");
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return L.t("A felismerő foglalt, próbáld újra.");
             case SpeechRecognizer.ERROR_CLIENT: return "cancel";
-            default: return "Felismerési hiba (" + e + ").";
+            default: return L.t("Felismerési hiba (") + e + ").";
         }
     }
 
@@ -746,8 +747,8 @@ public class MainActivity extends Activity {
             tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
                 public void onInit(int st) {
                     ttsReady = st == TextToSpeech.SUCCESS;
-                    if (!ttsReady) { voiceEvent("error", "A felolvasó nem érhető el."); return; }
-                    tts.setLanguage(new Locale("hu", "HU"));
+                    if (!ttsReady) { voiceEvent("error", L.t("A felolvasó nem érhető el.")); return; }
+                    tts.setLanguage(L.locale());
                     if (pendingSpeak != null) { String t = pendingSpeak; pendingSpeak = null; speakNow(t); }
                 }
             });
@@ -772,7 +773,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void startListening(final String lang) {
             ui.post(new Runnable() { public void run() {
-                pendingLang = lang == null || lang.isEmpty() ? "hu-HU" : lang;
+                pendingLang = lang == null || lang.isEmpty() ? L.tag() : lang;
                 if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(PERM_MIC) != PackageManager.PERMISSION_GRANTED)
                     requestPermissions(new String[]{PERM_MIC}, REQ_MIC);
                 else startRec(pendingLang);
@@ -800,8 +801,18 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public boolean bubbleOn() { return BubbleService.running; }
+        @JavascriptInterface public String sysLang() { return java.util.Locale.getDefault().toLanguageTag(); }
+        /** "auto" | "hu" | "en" – a natív részek (panel, értesítések, súgó) is ezt követik */
+        @JavascriptInterface public void setLang(String v) {
+            getSharedPreferences("app", MODE_PRIVATE).edit().putString("lang", v == null ? "auto" : v).apply();
+            L.init(MainActivity.this);
+            if (BubbleService.running) ui.post(new Runnable() { public void run() {
+                BubbleService.stop(MainActivity.this);
+                ui.postDelayed(new Runnable() { public void run() { BubbleService.start(MainActivity.this); } }, 800);
+            } });
+        }
         @JavascriptInterface public String getChips() {
-            return getSharedPreferences("bubble", MODE_PRIVATE).getString("chips", BubbleService.DEFAULT_CHIPS);
+            return getSharedPreferences("bubble", MODE_PRIVATE).getString("chips", L.defaultChips());
         }
         @JavascriptInterface public void setChips(String v) {
             SharedPreferences.Editor e = getSharedPreferences("bubble", MODE_PRIVATE).edit();
@@ -889,7 +900,7 @@ public class MainActivity extends Activity {
         pb.setIndeterminateTintList(ColorStateList.valueOf(C_ACCENT));
         l.addView(pb, new LinearLayout.LayoutParams(dp(40), dp(40)));
 
-        status = text("Claude motor indítása…", 16, C_DIM, false);
+        status = text(L.t("Claude motor indítása…"), 16, C_DIM, false);
         status.setPadding(dp(24), dp(18), dp(24), 0);
         status.setGravity(Gravity.CENTER);
         l.addView(status);
@@ -937,7 +948,7 @@ public class MainActivity extends Activity {
             public void onClick(View v) {
                 ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 cm.setPrimaryClip(ClipData.newPlainText("parancs", cmd));
-                toast("Parancs vágólapra másolva");
+                toast(L.t("Parancs vágólapra másolva"));
             }
         });
         return t;
@@ -977,17 +988,17 @@ public class MainActivity extends Activity {
         ImageView icon = new ImageView(this);
         icon.setImageResource(R.drawable.splash_icon);
         head.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
-        TextView t = text("Nem sikerült elindítani a Claude motort", 21, C_FG, true);
+        TextView t = text(L.t("Nem sikerült elindítani a Claude motort"), 21, C_FG, true);
         t.setPadding(dp(16), 0, 0, 0);
         head.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
         c.addView(head);
 
         String why;
-        if (reason.equals("notermux")) why = "A Termux alkalmazás nincs telepítve ezen az eszközön.";
-        else if (reason.startsWith("perm")) why = "Az alkalmazásnak nincs engedélye parancsot futtatni a Termuxban.";
-        else if (reason.equals("timeout")) why = "A szerver 25 másodperc alatt sem válaszolt (127.0.0.1:8765). " +
-                "Lehet, hogy a Termux nem engedi külső alkalmazások parancsait, vagy hiányzik az indító szkript.";
-        else why = "Hiba a Termux hívásakor: " + reason.replaceFirst("^error:", "");
+        if (reason.equals("notermux")) why = L.t("A Termux alkalmazás nincs telepítve ezen az eszközön.");
+        else if (reason.startsWith("perm")) why = L.t("Az alkalmazásnak nincs engedélye parancsot futtatni a Termuxban.");
+        else if (reason.equals("timeout")) why = L.t("A szerver 25 másodperc alatt sem válaszolt (127.0.0.1:8765). ") +
+                L.t("Lehet, hogy a Termux nem engedi külső alkalmazások parancsait, vagy hiányzik az indító szkript.");
+        else why = L.t("Hiba a Termux hívásakor: ") + reason.replaceFirst("^error:", "");
         TextView w = text(why, 15, C_DIM, false);
         w.setPadding(0, dp(16), 0, dp(4));
         w.setLineSpacing(0, 1.2f);
@@ -1001,20 +1012,20 @@ public class MainActivity extends Activity {
         cardLp.setMargins(0, dp(16), 0, 0);
         c.addView(card, cardLp);
 
-        step(card, "1.", "Termux telepítve", "Telepítsd a Termuxot (F-Droid vagy GitHub verzió), és benne a PRoot Ubuntut a Claude-dal.");
+        step(card, "1.", L.t("Termux telepítve"), L.t("Telepítsd a Termuxot (F-Droid vagy GitHub verzió), és benne a PRoot Ubuntut a Claude-dal."));
         if (!termuxInstalled()) {
-            card.addView(button("Termux letöltése (F-Droid)", false, new View.OnClickListener() {
+            card.addView(button(L.t("Termux letöltése (F-Droid)"), false, new View.OnClickListener() {
                 public void onClick(View v) { openExternal(Uri.parse("https://f-droid.org/packages/com.termux/")); }
             }));
         }
-        step(card, "2.", "Külső alkalmazások engedélyezése a Termuxban", "Futtasd a Termuxban (koppintás = másolás):");
+        step(card, "2.", L.t("Külső alkalmazások engedélyezése a Termuxban"), L.t("Futtasd a Termuxban (koppintás = másolás):"));
         card.addView(code("echo \"allow-external-apps=true\" >> ~/.termux/termux.properties"));
         card.addView(code("termux-reload-settings"));
-        step(card, "3.", "Engedély megadása",
-                "Claude Tablet → Engedélyek → További engedélyek → „Parancsok futtatása a Termux környezetben” → Engedélyezés.");
+        step(card, "3.", L.t("Engedély megadása"),
+                L.t("Claude Tablet → Engedélyek → További engedélyek → „Parancsok futtatása a Termux környezetben” → Engedélyezés."));
         LinearLayout row3 = new LinearLayout(this);
         row3.setPadding(0, dp(8), 0, 0);
-        row3.addView(button("Alkalmazás-beállítások megnyitása", false, new View.OnClickListener() {
+        row3.addView(button(L.t("Alkalmazás-beállítások megnyitása"), false, new View.OnClickListener() {
             public void onClick(View v) {
                 Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.fromParts("package", getPackageName(), null));
@@ -1022,29 +1033,29 @@ public class MainActivity extends Activity {
             }
         }));
         card.addView(row3);
-        step(card, "4.", "Újrapróbálás", null);
+        step(card, "4.", L.t("Újrapróbálás"), null);
 
         LinearLayout row = new LinearLayout(this);
         row.setPadding(0, dp(10), 0, 0);
-        row.addView(button("Újrapróbálás", true, new View.OnClickListener() {
+        row.addView(button(L.t("Újrapróbálás"), true, new View.OnClickListener() {
             public void onClick(View v) { retry(); }
         }));
         View gap = new View(this);
         row.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
         if (termuxInstalled()) {
-            row.addView(button("Termux megnyitása", false, new View.OnClickListener() {
+            row.addView(button(L.t("Termux megnyitása"), false, new View.OnClickListener() {
                 public void onClick(View v) {
                     Intent i = getPackageManager().getLaunchIntentForPackage("com.termux");
-                    if (i != null) startActivity(i); else toast("A Termux nem indítható");
+                    if (i != null) startActivity(i); else toast(L.t("A Termux nem indítható"));
                 }
             }));
         }
         card.addView(row);
 
-        TextView mh = text("Kézi indítás", 17, C_FG, true);
+        TextView mh = text(L.t("Kézi indítás"), 17, C_FG, true);
         mh.setPadding(0, dp(24), 0, dp(2));
         c.addView(mh);
-        TextView mb = text("Ha az automatikus indítás nem megy, indítsd el kézzel a Termuxban, majd koppints az Újrapróbálás gombra:",
+        TextView mb = text(L.t("Ha az automatikus indítás nem megy, indítsd el kézzel a Termuxban, majd koppints az Újrapróbálás gombra:"),
                 14, C_DIM, false);
         mb.setLineSpacing(0, 1.2f);
         c.addView(mb);

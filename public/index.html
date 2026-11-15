@@ -176,6 +176,81 @@ body.pip .app{grid-template-columns:1fr!important}
 body.pip{font-size:12px}
 body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin:4px}
 </style>
+<script>
+// ---- Nyelv: magyar rendszernyelven magyar, máshol angol; a menüben átállítható ----
+const LANG = (() => {
+  let v = 'auto'; try { v = JSON.parse(localStorage.getItem('ct_lang')) || 'auto'; } catch {}
+  if (v === 'hu' || v === 'en') return v;
+  let sys = navigator.language || 'en'; try { if (window.ClaudeApp?.sysLang) sys = ClaudeApp.sysLang(); } catch {}
+  return /^hu/i.test(sys) ? 'hu' : 'en';
+})();
+const LOCALE = LANG === 'hu' ? 'hu-HU' : (navigator.language || 'en-US');
+function setLang(v) { localStorage.setItem('ct_lang', JSON.stringify(v)); try { window.ClaudeApp?.setLang && ClaudeApp.setLang(v); } catch {} location.reload(); }
+const EN = {
+'Új beszélgetés':'New chat','＋ Új beszélgetés':'＋ New chat','⚡ Lebegő gomb: gyors gombok':'⚡ Floating button: quick actions','✓ Beállítás-ellenőrző':'✓ Setup check',
+'Korábbi beszélgetések':'Previous chats','Engedélyek':'Permissions','Automatikus (ajánlott)':'Automatic (recommended)','Szerkesztés OK':'Edits OK','Csak tervez':'Plan only',
+'Mindent szabad ⚠':'Allow everything ⚠','Csak engedélyezett':'Only allowed','↻ Motor újraindítása':'↻ Restart engine','Diktálás után':'After dictation','Javíthatom':'Let me edit',
+'Azonnal küldi':'Send immediately','Válasz felolvasása':'Read replies aloud','Ki':'Off','Be':'On','Lebegő Claude-gomb':'Floating Claude button',
+'Tabletvezérlés (képernyőkép, koppintás)':'Tablet control (screenshot, tap)','Téma':'Theme','Sötét':'Dark','Világos':'Light','Menü':'Menu','Fájlok':'Files','Új':'New',
+'Kép / fénykép':'Image / photo','Fájl a telefonról':'File from device','Tallózás a projektben':'Browse project','Beillesztés vágólapról':'Paste from clipboard','Csatolás':'Attach',
+'Írj Claude-nak…':'Message Claude…','Diktálás':'Dictate','Küldés':'Send','Leállítás':'Stop','Alapértelmezett':'Default','5 órás limit':'5-hour limit','Kontextus':'Context',
+'A motor nem fut – újracsatlakozás…':'Engine not running – reconnecting…','Lebegő gomb – gyors gombok':'Floating button – quick actions','Bezár':'Close',
+'Soronként egy gomb:':'One button per line:','Felirat | utasítás':'Label | instruction','. Ha van kijelölt szöveg vagy kép, arra vonatkozik, különben a képernyőre.':'. Applies to the selected text or image if there is one, otherwise to the screen.',
+'Alapértelmezett visszaállítva':'Defaults restored','Mentés':'Save','Mentve – a panel következő megnyitásakor frissül':'Saved – applied next time the panel opens',
+'Beállítás-ellenőrző':'Setup check','A ✗ sorok gombjával a hiányzó engedély egy lépésben megadható. Később a menüből újra megnyitható.':'Use the button on ✗ rows to grant what is missing. You can reopen this from the menu.',
+'Letöltés':'Download','Később':'Later','Új mappa':'New folder','Új mappa neve':'New folder name','Létrehoz':'Create','Mégse':'Cancel','Ezt választom':'Choose this',
+'Rejtett fájlok':'Hidden files','Útvonal a szövegbe':'Insert path','📎 Csatolás':'📎 Attach','Folytasd':'Continue','Folytasd.':'Continue.','Mit csinál ez a projekt?':'What does this project do?',
+'Hibakeresés':'Debug','Tesztek futtatása':'Run tests','Git állapot':'Git status','Magyarázd el':'Explain','Másol':'Copy','Kész ✓':'Done ✓',
+'Parancs':'Command','Olvasás':'Read','Szerkesztés':'Edit','Írás':'Write','Keresés':'Search','Fájlkeresés':'Find files','Weblap':'Web page','Webkeresés':'Web search',
+'Al-ügynök':'Subagent','Teendők':'To-dos','Miben segíthetek?':'How can I help?','Projekt:':'Project:','Projekt':'Project',
+'Még nincs beszélgetés ebben a projektben.':'No chats in this project yet.','Beszélgetés':'Chat','Várj, még tart a feltöltés…':'Wait, upload in progress…',
+'Válassz projektet':'Choose a project','Legutóbbiak':'Recent','Saját mappa':'Home folders','Tallózás…':'Browse…','Eltávolítás':'Remove','Már csatolva':'Already attached',
+'A vágólap üres':'Clipboard is empty','Nyomd hosszan a beviteli mezőt, és válaszd a Beillesztést':'Long-press the input field and choose Paste','Üres mappa.':'Empty folder.',
+'📕 PDF – csatold, és Claude elolvassa.':'📕 PDF – attach it and Claude will read it.','Nem sikerült':'Failed','A futó válasz után újraindul…':'Restarting after the current reply…',
+'Újraindítás…':'Restarting…','Diktálás leállítása':'Stop dictation','Hallgatlak… beszélj':'Listening… speak','Nem hallottam semmit.':'I didn\'t hear anything.',
+'✗ Kikapcsolva – bekapcsolás':'✗ Off – turn on','… Be, kapcsolódik a motorhoz':'… On, connecting to engine','✓ Működik':'✓ Working',
+'Motor (Termux + szerver)':'Engine (Termux + server)','Fut':'Running','Claude Code telepítve':'Claude Code installed','Megvan':'Installed',
+'Ubuntuban: npm install -g @anthropic-ai/claude-code':'In Ubuntu: npm install -g @anthropic-ai/claude-code','Bejelentkezve Claude-ba':'Signed in to Claude','Rendben':'OK',
+'Ubuntuban egyszer futtasd: claude (és jelentkezz be)':'Run once in Ubuntu: claude (and sign in)','Értesítések':'Notifications','Szól, ha egy hosszú feladat elkészült':'Tells you when a long task finishes',
+'Mikrofon':'Microphone','Nincs beszédfelismerő – telepítsd a Google appot':'No speech recognizer – install the Google app','Diktáláshoz':'For dictation',
+'Lebegő gomb engedély':'Floating button permission','„Megjelenítés más alkalmazások felett”':'“Display over other apps”','Tabletvezérlés':'Tablet control',
+'Akadálymentesség → Claude Tablet. Ha szürke: App-infó → ⋮ → „Korlátozott beállítások engedélyezése”':'Accessibility → Claude Tablet. If greyed out: App info → ⋮ → “Allow restricted settings”',
+'Akadálymentesség → Claude Tablet – tabletvezérlés':'Accessibility → Claude Tablet – tablet control','Működik (képernyőkép, koppintás, gépelés)':'Working (screenshot, tap, typing)',
+'Be van kapcsolva, kapcsolódik a motorhoz…':'Enabled, connecting to engine…','Megadás':'Grant','App-infó':'App info','Nyelv / Language':'Language / Nyelv',
+'Automatikus / Auto':'Auto','Limit: nincs adat':'Limit: no data','Kontextus: még üres':'Context: empty',
+// sablonok darabjai (t()-vel hívva)
+'most':'now',' perce':' min ago',' órája':' h ago','üzenet':'messages','Új verzió':'New version','Feltöltési hiba: ':'Upload error: ','Nem olvasható: ':'Cannot read: ',
+'Bináris fájl':'Binary file','előnézet nem érhető el.':'no preview available.','Felismerési hiba: ':'Recognition error: ','Nem sikerült megnyitni: ':'Could not open: ',
+' – ehhez frissítsd a Claude Tablet appot':' – update the Claude Tablet app for this','Claude hiba':'Claude error','Claude kész':'Claude done','A futás hibával ért véget':'The run ended with an error',
+'Válasz elkészült':'Reply ready','Hiba történt':'An error occurred','A motor nem érhető el – az üzenet visszakerült a beviteli mezőbe.':'Engine unreachable – your message was put back into the input.',
+'A motor a mostani válasz befejezése után indul újra. Mehet?':'The engine will restart after the current reply. Continue?','Újraindítod a motort? (pár másodperc)':'Restart the engine? (a few seconds)',
+'5 óra':'5 h','visszaáll':'resets','token':'tokens','Nézd meg a csatolt fájlokat.':'Look at the attached files.',
+'Nézd át ezt a projektet és foglald össze röviden, mit csinál és hogyan épül fel.':'Review this project and briefly summarize what it does and how it is structured.',
+'Keresd meg és javítsd a hibát: ':'Find and fix the bug: ','Futtasd a teszteket, és ha valami elbukik, javítsd.':'Run the tests and fix anything that fails.',
+'Mutasd a git állapotot és a legutóbbi változásokat röviden.':'Briefly show the git status and recent changes.',
+'Készíts egy commitot a jelenlegi változásokról, értelmes üzenettel.':'Create a commit of the current changes with a meaningful message.','Magyarázd el egyszerűen: ':'Explain simply: ',
+};
+function tr(s) { return LANG === 'en' && EN[s] !== undefined ? EN[s] : s; }
+// statikus és dinamikus feliratok fordítása (csak angolnál): pontos egyezés a szöveg-csomópontokra és a feliratattribútumokra
+function trNode(n) {
+  if (n.nodeType === 3) { const k = n.nodeValue.trim(); if (k && EN[k] !== undefined) n.nodeValue = n.nodeValue.replace(k, EN[k]); return; }
+  if (n.nodeType !== 1 || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return;
+  for (const a of ['placeholder', 'title', 'aria-label']) { const v = n.getAttribute(a); if (v && EN[v] !== undefined) n.setAttribute(a, EN[v]); }
+  if (n.tagName === 'TEXTAREA' || n.tagName === 'INPUT') return;
+  for (const c of n.childNodes) trNode(c);
+}
+if (LANG === 'en') {
+  document.documentElement.lang = 'en';
+  document.addEventListener('DOMContentLoaded', () => {
+    trNode(document.body);
+    new MutationObserver(ms => { for (const m of ms) {
+      if (m.type === 'childList') m.addedNodes.forEach(trNode);
+      else if (m.type === 'characterData') trNode(m.target);
+      else if (m.type === 'attributes') { const v = m.target.getAttribute(m.attributeName); if (v && EN[v] !== undefined) m.target.setAttribute(m.attributeName, EN[v]); }
+    } }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+  });
+}
+</script>
 </head>
 <body>
 <div class="app" id="app">
@@ -209,10 +284,10 @@ body.pip .msg,body.pip .bot,body.pip .user{font-size:12px;padding:6px 8px;margin
         <select id="tts"><option value="0">Ki</option><option value="1">Be</option></select></label>
       <label id="bubbleRow" style="display:none">Lebegő Claude-gomb
         <select id="bubble" onchange="ClaudeApp.setBubble(this.value==='1');setTimeout(syncBubble,1500)"><option value="0">Ki</option><option value="1">Be</option></select></label>
-      <label id="bubbleRow" style="display:none">Lebegő Claude-gomb
-        <select id="bubbleSel" onchange="window.ClaudeApp&&ClaudeApp.setBubble(this.value==='1')"><option value="0">Ki</option><option value="1">Be</option></select></label>
       <label id="agentRow" style="display:none">Tabletvezérlés (képernyőkép, koppintás)
         <button class="chip" style="text-align:center" id="agentBtn" onclick="ClaudeApp.openAgentSettings()">…</button></label>
+      <label>Nyelv / Language
+        <select id="langSel" onchange="setLang(this.value)"><option value="auto">Automatikus / Auto</option><option value="hu">Magyar</option><option value="en">English</option></select></label>
       <label>Téma
         <select id="theme"><option value="dark">Sötét</option><option value="light">Világos</option></select></label>
     </div>
@@ -322,13 +397,13 @@ const tools = {}; // tool_use_id -> DOM
 let pick = {};
 
 const CHIPS = [
-  ['Folytasd', 'Folytasd.'],
-  ['Mit csinál ez a projekt?', 'Nézd át ezt a projektet és foglald össze röviden, mit csinál és hogyan épül fel.'],
-  ['Hibakeresés', 'Keresd meg és javítsd a hibát: '],
-  ['Tesztek futtatása', 'Futtasd a teszteket, és ha valami elbukik, javítsd.'],
-  ['Git állapot', 'Mutasd a git állapotot és a legutóbbi változásokat röviden.'],
-  ['Commit', 'Készíts egy commitot a jelenlegi változásokról, értelmes üzenettel.'],
-  ['Magyarázd el', 'Magyarázd el egyszerűen: '],
+  ['Folytasd', tr('Folytasd.')],
+  ['Mit csinál ez a projekt?', tr('Nézd át ezt a projektet és foglald össze röviden, mit csinál és hogyan épül fel.')],
+  ['Hibakeresés', tr('Keresd meg és javítsd a hibát: ')],
+  ['Tesztek futtatása', tr('Futtasd a teszteket, és ha valami elbukik, javítsd.')],
+  ['Git állapot', tr('Mutasd a git állapotot és a legutóbbi változásokat röviden.')],
+  ['Commit', tr('Készíts egy commitot a jelenlegi változásokról, értelmes üzenettel.')],
+  ['Magyarázd el', tr('Magyarázd el egyszerűen: ')],
 ];
 
 // ---------- segédek ----------
@@ -386,8 +461,8 @@ function add(html, cls) { const d = document.createElement('div'); d.className =
 function base(p) { return p ? p.split('/').filter(Boolean).pop() || '/' : '—'; }
 function ago(ms) {
   const s = (Date.now() - ms) / 1000;
-  if (s < 60) return 'most'; if (s < 3600) return Math.floor(s / 60) + ' perce'; if (s < 86400) return Math.floor(s / 3600) + ' órája';
-  return new Date(ms).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+  if (s < 60) return tr('most'); if (s < 3600) return Math.floor(s / 60) + tr(' perce'); if (s < 86400) return Math.floor(s / 3600) + tr(' órája');
+  return new Date(ms).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' });
 }
 function toolArg(name, inp = {}) {
   return inp.command || inp.file_path || inp.path || inp.pattern || inp.url || inp.query || inp.description || inp.prompt || JSON.stringify(inp);
@@ -466,7 +541,7 @@ async function loadSessions() {
   el.innerHTML = list.length ? '' : '<div style="color:var(--muted);padding:12px;font-size:14px">Még nincs beszélgetés ebben a projektben.</div>';
   for (const s of list) {
     const b = document.createElement('button'); b.className = 'sess' + (s.id === state.session ? ' on' : '');
-    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)} · ${s.count} üzenet</div>`;
+    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)} · ${s.count} ${LANG === 'en' && s.count === 1 ? 'message' : tr('üzenet')}</div>`;
     b.onclick = () => openSession(s.id, s.title);
     el.append(b);
   }
@@ -506,7 +581,7 @@ async function onSend() {
   if ((!typed && !atts.length) || !state.cwd) return;
   if (atts.some(a => a.status === 'up')) return toast('Várj, még tart a feltöltés…');
   const sent = atts.filter(a => a.status === 'ok');
-  const text = (typed || 'Nézd meg a csatolt fájlokat.') + (sent.length ? `\n\n${ATT_HDR}\n` + sent.map(a => '- ' + a.path).join('\n') : '');
+  const text = (typed || tr('Nézd meg a csatolt fájlokat.')) + (sent.length ? `\n\n${ATT_HDR}\n` + sent.map(a => '- ' + a.path).join('\n') : '');
   const savedAtts = atts; atts = []; renderTray();
   input.value = ''; autosize();
   if (chat.querySelector('.empty')) chat.innerHTML = '';
@@ -546,12 +621,12 @@ async function onSend() {
       if (!notified) {
         notified = true;
         const sum = plain(lastText).slice(0, 100);
-        if (e.isError) nativeNotify('Claude hiba', sum || 'A futás hibával ért véget');
-        else { nativeNotify('Claude kész', sum || 'Válasz elkészült'); speakReply(lastText); }
+        if (e.isError) nativeNotify(tr('Claude hiba'), sum || tr('A futás hibával ért véget'));
+        else { nativeNotify(tr('Claude kész'), sum || tr('Válasz elkészült')); speakReply(lastText); }
       }
     } else if (e.kind === 'error') {
       flush(); add(esc(e.text), 'err');
-      if (!notified) { notified = true; nativeNotify('Claude hiba', plain(e.text).slice(0, 100) || 'Hiba történt'); }
+      if (!notified) { notified = true; nativeNotify(tr('Claude hiba'), plain(e.text).slice(0, 100) || tr('Hiba történt')); }
     }
     scrollDown();
   };
@@ -561,7 +636,7 @@ async function onSend() {
     try {
       r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cwd: state.cwd, sessionId: state.session, prompt: text, mode: $('#mode').value, model: $('#model').value }) });
-    } catch (err) { if (isNetErr(err)) { input.value = typed; atts = savedAtts; renderTray(); autosize(); waitForServer(); throw new Error('A motor nem érhető el – az üzenet visszakerült a beviteli mezőbe.'); } throw err; }
+    } catch (err) { if (isNetErr(err)) { input.value = typed; atts = savedAtts; renderTray(); autosize(); waitForServer(); throw new Error(tr('A motor nem érhető el – az üzenet visszakerült a beviteli mezőbe.')); } throw err; }
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText || ('HTTP ' + r.status)); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let rest = '';
     try {
@@ -676,7 +751,7 @@ async function uploadOne(f) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.path) throw new Error(j.error || 'HTTP ' + r.status);
     a.path = j.path; a.status = 'ok';
-  } catch (e) { a.status = 'err'; a.err = 'Feltöltési hiba: ' + e.message; toast(a.err); }
+  } catch (e) { a.status = 'err'; a.err = tr('Feltöltési hiba: ') + e.message; toast(a.err); }
   renderTray();
 }
 function addFiles(list) { [...list].forEach(uploadOne); }
@@ -750,10 +825,10 @@ async function fbView(p) {
     const r = await fetch(url, { cache: 'no-store' });
     const ct = r.headers.get('content-type') || '', len = +r.headers.get('content-length') || 0;
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    if (!/^text\/|json|javascript|xml/.test(ct)) { v.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted)">Bináris fájl (${fsize(len)}) – előnézet nem érhető el.</div>`; r.body?.cancel(); return; }
+    if (!/^text\/|json|javascript|xml/.test(ct)) { v.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted)">${tr('Bináris fájl')} (${fsize(len)}) – ${tr('előnézet nem érhető el.')}</div>`; r.body?.cancel(); return; }
     let t = await r.text(); const cut = t.length > 200000; if (cut) t = t.slice(0, 200000);
     v.innerHTML = ''; const pre = document.createElement('pre'); pre.textContent = t + (cut ? '\n… (levágva)' : ''); v.append(pre);
-  } catch (e) { v.innerHTML = `<div class="err">Nem olvasható: ${esc(e.message)}</div>`; }
+  } catch (e) { v.innerHTML = `<div class="err">${tr('Nem olvasható: ')}${esc(e.message)}</div>`; }
 }
 function fbBack() { if (fbs.file) fbList(fbs.path); else if (fbs.parent) fbList(fbs.parent); }
 function fbToggleHidden() { fbs.hidden = !fbs.hidden; store.set('fbhidden', fbs.hidden); openFiles(); }
@@ -765,7 +840,7 @@ function fbInsertPath() {
 }
 
 async function restartEngine() {
-  if (!confirm(state.busy ? 'A motor a mostani válasz befejezése után indul újra. Mehet?' : 'Újraindítod a motort? (pár másodperc)')) return;
+  if (!confirm(state.busy ? tr('A motor a mostani válasz befejezése után indul újra. Mehet?') : tr('Újraindítod a motort? (pár másodperc)'))) return;
   const r = await api('/api/restart', {});
   if (!r.ok) return toast(r.error || 'Nem sikerült');
   toast(r.waiting ? 'A futó válasz után újraindul…' : 'Újraindítás…');
@@ -786,10 +861,10 @@ function setCtx(tokens, win, model) {
   ctx.window = win || store.get('ctxwin', {})[ctx.model] || (/\[1m\]/i.test(ctx.model || '') ? 1e6 : (win === undefined && ctx.window) || 200000);
   paintRails();
 }
-function setDefaultModel(m) { const o = $('#model').options[0]; o.textContent = 'Alapértelmezett (' + MODEL_HU(m) + ')'; }
+function setDefaultModel(m) { const o = $('#model').options[0]; o.textContent = tr('Alapértelmezett') + ' (' + MODEL_HU(m) + ')'; }
 function lvl(p) { return p < 60 ? 'var(--ok)' : p < 85 ? 'var(--accent)' : 'var(--err)'; }
-function hhmm(iso) { try { const d = new Date(iso); const t = d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
-  return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString('hu-HU', { weekday: 'short' }) + ' ' + t; } catch { return ''; } }
+function hhmm(iso) { try { const d = new Date(iso); const t = d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString(LOCALE, { weekday: 'short' }) + ' ' + t; } catch { return ''; } }
 function paintRail(el, pct) {
   el.classList.toggle('none', pct == null);
   const f = el.querySelector('.fl'); const p = Math.max(0, Math.min(100, pct || 0));
@@ -800,15 +875,15 @@ function paintRails() {
   paintRail($('#railL'), usage?.five ? usage.five.pct : null);
   paintRail($('#railR'), ctxPct());
   const parts = [];
-  if (usage?.five) parts.push(`5 óra: ${Math.round(usage.five.pct)}%`);
+  if (usage?.five) parts.push(`${tr('5 óra')}: ${Math.round(usage.five.pct)}%`);
   if (ctx.tokens) parts.push(`Kontextus: ${Math.round(ctxPct())}%`);
   $('#stat').textContent = parts.join(' · ');
 }
 function railInfo(side) {
   const k = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n / 1000) + 'k';
-  const L = usage?.five ? `5 órás limit: ${Math.round(usage.five.pct)}% – visszaáll ${hhmm(usage.five.resets)}` : (usage?.error ? 'Limit: ' + usage.error : 'Limit: nincs adat');
+  const L = usage?.five ? `${tr('5 órás limit')}: ${Math.round(usage.five.pct)}% – ${tr('visszaáll')} ${hhmm(usage.five.resets)}` : (usage?.error ? 'Limit: ' + usage.error : tr('Limit: nincs adat'));
   const W = usage?.week ? ` · Heti: ${Math.round(usage.week.pct)}%` : '';
-  const R = ctx.tokens ? `Kontextus: ${Math.round(ctxPct())}% (${k(ctx.tokens)} / ${k(ctx.window)} token)` : 'Kontextus: még üres';
+  const R = ctx.tokens ? `${tr('Kontextus')}: ${Math.round(ctxPct())}% (${k(ctx.tokens)} / ${k(ctx.window)} ${tr('token')})` : tr('Kontextus: még üres');
   toast(side === 'l' ? L + W : side === 'r' ? R : L + W + '\n' + R);
 }
 async function loadUsage(fresh) {
@@ -846,14 +921,14 @@ function micToggle() {
   vbase = input.value.trim() ? input.value.replace(/\s*$/, ' ') : '';
   listening = true; micUI();
   try { window.ClaudeApp?.vibrate(); } catch {}
-  if (hasNativeVoice) { ClaudeApp.startListening('hu-HU'); return; }
-  webRec = new WebSR(); webRec.lang = 'hu-HU'; webRec.interimResults = true; webRec.continuous = false;
+  if (hasNativeVoice) { ClaudeApp.startListening(LOCALE); return; }
+  webRec = new WebSR(); webRec.lang = LOCALE; webRec.interimResults = true; webRec.continuous = false;
   let fin = '';
   webRec.onresult = ev => {
     let t = ''; for (const r of ev.results) t += r[0].transcript;
     fin = t; input.value = vbase + t; autosize();
   };
-  webRec.onerror = ev => { if (ev.error !== 'aborted') vtoast(ev.error === 'no-speech' ? 'Nem hallottam semmit.' : 'Felismerési hiba: ' + ev.error); };
+  webRec.onerror = ev => { if (ev.error !== 'aborted') vtoast(ev.error === 'no-speech' ? tr('Nem hallottam semmit.') : tr('Felismerési hiba: ') + ev.error); };
   webRec.onend = () => voiceDone(fin);
   webRec.start();
 }
@@ -861,7 +936,7 @@ function micToggle() {
 function launchApp(pkg, label) {
   try {
     if (window.ClaudeApp?.launchApp) { ClaudeApp.launchApp(pkg); add('📱 ' + esc(label || pkg) + ' megnyitva', 'meta'); return; }
-  } catch (err) { add('Nem sikerült megnyitni: ' + esc(String(err)), 'err'); return; }
+  } catch (err) { add(tr('Nem sikerült megnyitni: ') + esc(String(err)), 'err'); return; }
   add('📱 ' + esc(label || pkg) + ' – ehhez frissítsd a Claude Tablet appot', 'meta');
 }
 window.onPip = on => { document.body.classList.toggle('pip', !!on); if (on) scrollDown(true); };
@@ -881,7 +956,7 @@ function speakReply(t) {
   if ($('#tts').value !== '1') return;
   const txt = plain(t).slice(0, 6000); if (!txt) return;
   try { if (window.ClaudeApp?.speak) return ClaudeApp.speak(txt); } catch {}
-  if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(txt); u.lang = 'hu-HU'; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+  if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(txt); u.lang = LOCALE; speechSynthesis.cancel(); speechSynthesis.speak(u); }
 }
 function stopSpeaking() {
   try { window.ClaudeApp?.stopSpeaking?.(); } catch {}
@@ -904,7 +979,8 @@ CHIPS.forEach(([label, text]) => {
   $('#chips').append(c);
 });
 function syncBubble() { try { if (window.ClaudeApp && ClaudeApp.bubbleOn) { $('#bubbleRow').style.display = ''; $('#bubble').value = ClaudeApp.bubbleOn() ? '1' : '0'; } } catch {} }
-syncBubble(); document.addEventListener('visibilitychange', () => { if (!document.hidden) syncBubble(); });
+syncBubble(); setInterval(syncBubble, 3000); document.addEventListener('visibilitychange', () => { if (!document.hidden) syncBubble(); });
+try { $('#langSel').value = JSON.parse(localStorage.getItem('ct_lang')) || 'auto'; } catch {}
 ['mode', 'model', 'theme', 'vsend', 'tts'].forEach(k => {
   const el = $('#' + k); if (!el) return; el.value = store.get(k, el.value);
   el.onchange = () => { store.set(k, el.value); if (k === 'theme') applyTheme(); };
@@ -928,10 +1004,9 @@ applyTheme(); setBusy(false); autosize();
 </script>
 <script>
 (function(){ const A=window.ClaudeApp; if(!A||!A.setBubble) return;
-  const r=document.getElementById('bubbleRow'), sel=document.getElementById('bubbleSel'); r.style.display='';
   const ar=document.getElementById('agentRow'), ab=document.getElementById('agentBtn');
   if(A.agentState) ar.style.display='';
-  const sync=()=>{ try{ sel.value=A.bubbleOn()?'1':'0';
+  const sync=()=>{ try{
     if(A.agentState){ const st=A.agentState(); ab.textContent=['✗ Kikapcsolva – bekapcsolás','… Be, kapcsolódik a motorhoz','✓ Működik'][st]; ab.disabled=st===2; } }catch(e){} };
   sync(); setInterval(sync,3000); })();
 </script>
@@ -979,7 +1054,7 @@ async function checkUpdate(force) {
     const v = await (await fetch(UPD_URL + '?t=' + Date.now(), { cache: 'no-store' })).json();
     localStorage.setItem('ct_updChecked', String(Date.now()));
     if (v.versionCode > A.appVersion()) {
-      document.getElementById('updtx').textContent = `Új verzió: ${v.versionName}` + (v.notes ? ' – ' + v.notes : '');
+      document.getElementById('updtx').textContent = `${tr('Új verzió')}: ${v.versionName}` + (v.notes ? ' – ' + v.notes : '');
       document.getElementById('updgo').onclick = () => { A.openUrl(v.apk); updLater(); };
       document.getElementById('updbar').style.display = 'flex';
     }

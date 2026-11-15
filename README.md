@@ -1,5 +1,7 @@
 # Claude Tablet
 
+> 🇬🇧 **English:** the app UI switches to English automatically on non-Hungarian devices (or choose it in the menu: *Language / Nyelv*). Download: [claude-tablet.apk](https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk).
+
 Érintésbarát, magyar nyelvű felület a [Claude Code](https://docs.anthropic.com/en/docs/claude-code)-hoz Android tableten –
 Termux + PRoot Ubuntu alatt futó helyi szerverrel és natív Android héjjal.
 

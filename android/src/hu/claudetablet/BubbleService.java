@@ -107,6 +107,7 @@ public class BubbleService extends Service {
         inst = this;
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         prefs = getSharedPreferences("bubble", MODE_PRIVATE);
+        L.init(this);
     }
 
     @Override
@@ -114,7 +115,7 @@ public class BubbleService extends Service {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) { stopAll(); return START_NOT_STICKY; }
         goForeground();
         if (!Settings.canDrawOverlays(this)) {
-            toast("Engedélyezd: Megjelenítés más alkalmazások felett");
+            toast(L.t("Engedélyezd: Megjelenítés más alkalmazások felett"));
             Intent s = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + getPackageName()));
             s.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try { startActivity(s); } catch (Exception e) {}
@@ -151,7 +152,7 @@ public class BubbleService extends Service {
     void goForeground() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CH) == null) {
-            NotificationChannel c = new NotificationChannel(CH, "Lebegő Claude-gomb", NotificationManager.IMPORTANCE_MIN);
+            NotificationChannel c = new NotificationChannel(CH, L.t("Lebegő Claude-gomb"), NotificationManager.IMPORTANCE_MIN);
             c.setShowBadge(false);
             nm.createNotificationChannel(c);
         }
@@ -159,9 +160,9 @@ public class BubbleService extends Service {
         PendingIntent ps = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE);
         PendingIntent open = PendingIntent.getActivity(this, 2, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CH) : new Notification.Builder(this);
-        b.setSmallIcon(R.drawable.ic_stat_claude).setContentTitle("Lebegő Claude-gomb")
-                .setContentText("Koppints a gombra bármelyik appban").setContentIntent(open).setOngoing(true)
-                .addAction(new Notification.Action.Builder(null, "Kikapcsolás", ps).build());
+        b.setSmallIcon(R.drawable.ic_stat_claude).setContentTitle(L.t("Lebegő Claude-gomb"))
+                .setContentText(L.t("Koppints a gombra bármelyik appban")).setContentIntent(open).setOngoing(true)
+                .addAction(new Notification.Action.Builder(null, L.t("Kikapcsolás"), ps).build());
         if (Build.VERSION.SDK_INT >= 29) startForeground(7, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
         else startForeground(7, b.build());
     }
@@ -284,8 +285,8 @@ public class BubbleService extends Service {
             updateToggles();
         } });
         head.addView(bScreen); head.addView(bTts);
-        head.addView(btn("＋", new View.OnClickListener() { public void onClick(View v) { newNext = true; all.setLength(0); answer.setText(""); setStatus("Új beszélgetés"); } }));
-        head.addView(btn("Ki", new View.OnClickListener() { public void onClick(View v) { stopAll(); } }));
+        head.addView(btn("＋", new View.OnClickListener() { public void onClick(View v) { newNext = true; all.setLength(0); answer.setText(""); setStatus(L.t("Új beszélgetés")); } }));
+        head.addView(btn(L.t("Ki"), new View.OnClickListener() { public void onClick(View v) { stopAll(); } }));
         head.addView(btn("✕", new View.OnClickListener() { public void onClick(View v) { hidePanel(); } }));
         head.setOnTouchListener(new View.OnTouchListener() {
             float sy; int oy;
@@ -341,7 +342,7 @@ public class BubbleService extends Service {
         row.setGravity(Gravity.CENTER_VERTICAL);
         input = new EditText(this);
         input.setTextColor(C_FG); input.setHintTextColor(C_DIM); input.setTextSize(16);
-        input.setHint("Írj, vagy diktálj a 🎤-val…");
+        input.setHint(L.t("Írj, vagy diktálj a 🎤-val…"));
         input.setBackground(round(C_CARD, 12));
         input.setPadding(dp(12), dp(8), dp(12), dp(8));
         input.setMaxLines(4);
@@ -354,7 +355,7 @@ public class BubbleService extends Service {
             focusInput(false);
             Intent i = new Intent(BubbleService.this, ProcessTextActivity.class).setAction(ProcessTextActivity.ACTION_PICK);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try { startActivity(i); } catch (Exception e) { setStatus("Nem nyitható a képválasztó"); }
+            try { startActivity(i); } catch (Exception e) { setStatus(L.t("Nem nyitható a képválasztó")); }
         } }));
         bMic = btn("🎤", new View.OnClickListener() { public void onClick(View v) { if (listening) stopRec(); else startRec(); } });
         bSend = btn("➤", new View.OnClickListener() { public void onClick(View v) { if (busy) stopRun(); else sendInput(); } });
@@ -398,7 +399,7 @@ public class BubbleService extends Service {
         if (chips != null) buildChips();
         if (panelShown) return;
         placePanel();
-        try { wm.addView(panel, pp); panelShown = true; } catch (Exception e) { toast("Panel hiba: " + e.getMessage()); }
+        try { wm.addView(panel, pp); panelShown = true; } catch (Exception e) { toast(L.t("Panel hiba: ") + e.getMessage()); }
     }
 
     void hidePanel() {
@@ -438,25 +439,25 @@ public class BubbleService extends Service {
 
     void startRec() {
         if (busy) return;
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) { setStatus("Nincs beszédfelismerő"); return; }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { setStatus(L.t("Nincs beszédfelismerő")); return; }
         if (tts != null) tts.stop();
         if (sr == null) {
             sr = SpeechRecognizer.createSpeechRecognizer(this);
             sr.setRecognitionListener(new RecognitionListener() {
-                public void onReadyForSpeech(Bundle b) { setStatus("🎤 Hallgatlak…"); }
+                public void onReadyForSpeech(Bundle b) { setStatus(L.t("🎤 Hallgatlak…")); }
                 public void onBeginningOfSpeech() {}
                 public void onRmsChanged(float db) { bubble.setScaleX(1f + Math.max(0, db) / 40f); bubble.setScaleY(bubble.getScaleX()); }
                 public void onBufferReceived(byte[] b) {}
-                public void onEndOfSpeech() { setStatus("Feldolgozás…"); }
+                public void onEndOfSpeech() { setStatus(L.t("Feldolgozás…")); }
                 public void onError(int e) {
                     recDone();
                     setStatus(e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ? "Nem hallottam semmit"
-                            : e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ? "Nincs mikrofon-engedély" : "Diktálási hiba (" + e + ")");
+                            : e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ? L.t("Nincs mikrofon-engedély") : L.t("Diktálási hiba (") + e + ")");
                 }
                 public void onResults(Bundle b) {
                     recDone();
                     String t = first(b);
-                    if (t.isEmpty()) { setStatus("Nem értettem"); return; }
+                    if (t.isEmpty()) { setStatus(L.t("Nem értettem")); return; }
                     input.setText(t);
                     sendInput();
                 }
@@ -466,13 +467,13 @@ public class BubbleService extends Service {
         }
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hu-HU");
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, L.tag());
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
         listening = true;
         input.setText("");
         setBubbleColor(C_REC); bMic.setText("■");
-        try { sr.startListening(i); } catch (Exception e) { recDone(); setStatus("Diktálási hiba: " + e.getMessage()); }
+        try { sr.startListening(i); } catch (Exception e) { recDone(); setStatus(L.t("Diktálási hiba: ") + e.getMessage()); }
     }
 
     void stopRec() { if (sr != null) sr.stopListening(); }
@@ -494,7 +495,7 @@ public class BubbleService extends Service {
 
     /** gyors gombok újraépítése a beállításokból (prefs "chips") */
     void buildChips() {
-        String cfg = prefs.getString("chips", DEFAULT_CHIPS);
+        String cfg = prefs.getString("chips", L.defaultChips());
         if (cfg.equals(chipsShown)) return;
         chipsShown = cfg;
         chips.removeAllViews();
@@ -514,7 +515,7 @@ public class BubbleService extends Service {
             if (busy) return;
             // kijelölt szöveg / kép van: arra vonatkozik; különben a képernyőre
             if (sel != null || img != null) ask(prompt, false);
-            else ask(prompt + " (A képernyőn látható tartalomról van szó.)", true);
+            else ask(prompt + L.t(" (A képernyőn látható tartalomról van szó.)"), true);
         } });
         b.setTextSize(14);
         row.addView(b);
@@ -523,18 +524,18 @@ public class BubbleService extends Service {
     void setSelection(String t) {
         sel = t == null || t.trim().isEmpty() ? null : t.trim();
         showAttach();
-        if (sel != null) setStatus("Kijelölt szöveg – mit csináljak vele?");
+        if (sel != null) setStatus(L.t("Kijelölt szöveg – mit csináljak vele?"));
     }
 
     void setImage(String path) {
         img = path == null || path.isEmpty() ? null : path;
         showAttach();
-        if (img != null) setStatus("Kép csatolva – mit csináljak vele?");
+        if (img != null) setStatus(L.t("Kép csatolva – mit csináljak vele?"));
     }
 
     void showAttach() {
         if (sel == null && img == null) { selView.setVisibility(View.GONE); return; }
-        String t = (img != null ? "🖼 kép  " : "") + (sel != null ? "✂ " + sel.replace('\n', ' ') : "");
+        String t = (img != null ? L.t("🖼 kép  ") : "") + (sel != null ? "✂ " + sel.replace('\n', ' ') : "");
         selView.setText(t + "   ✕");
         selView.setVisibility(View.VISIBLE);
         showPanel();
@@ -542,16 +543,16 @@ public class BubbleService extends Service {
 
     void copyAnswer() {
         String t = lastBlock.isEmpty() ? all.toString().trim() : lastBlock;
-        if (t.isEmpty()) { setStatus("Nincs mit másolni"); return; }
+        if (t.isEmpty()) { setStatus(L.t("Nincs mit másolni")); return; }
         android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         cm.setPrimaryClip(android.content.ClipData.newPlainText("Claude", plain(t)));
-        setStatus("Vágólapra másolva ✓");
+        setStatus(L.t("Vágólapra másolva ✓"));
         vibrate();
     }
 
     void sendInput() {
         String t = input.getText().toString().trim();
-        if (t.isEmpty() && (sel != null || img != null)) t = img != null ? "Mi ez? Röviden." : "Mit gondolsz erről?";
+        if (t.isEmpty() && (sel != null || img != null)) t = img != null ? L.t("Mi ez? Röviden.") : L.t("Mit gondolsz erről?");
         ask(t, prefs.getBoolean("screen", true) && sel == null && img == null);
     }
 
@@ -559,12 +560,12 @@ public class BubbleService extends Service {
         if (q == null || q.isEmpty() || busy) return;
         String shown = q;
         if (sel != null) {
-            q = q + "\n\nKijelölt szöveg:\n\"\"\"\n" + sel + "\n\"\"\"";
-            shown += "  (✂ kijelölt szöveg)";
+            q = q + L.t("\n\nKijelölt szöveg:\n\"\"\"\n") + sel + "\n\"\"\"";
+            shown += L.t("  (✂ kijelölt szöveg)");
         }
         if (img != null) {
-            q = q + "\n\nCsatolt kép (nézd meg Read-dal): " + img;
-            shown += "  (🖼 kép)";
+            q = q + L.t("\n\nCsatolt kép (nézd meg Read-dal): ") + img;
+            shown += L.t("  (🖼 kép)");
         }
         if (sel != null || img != null) { img = null; setSelection(null); }
         final String text = q;
@@ -575,7 +576,7 @@ public class BubbleService extends Service {
         all.setLength(0); block.setLength(0); lastBlock = "";
         answer.setText("› " + shown + "\n\n");
         final boolean fresh = newNext; newNext = false;
-        setStatus(screen ? "📷 Képernyőkép…" : "Gondolkodom…");
+        setStatus(screen ? L.t("📷 Képernyőkép…") : L.t("Gondolkodom…"));
         setBubbleColor(0xff8a6bd1);
         if (screen) setOverlayVisible(false);
         // biztonsági háló: ha a szerver nem jelez vissza, 15 mp múlva újra látszik a gomb
@@ -596,7 +597,7 @@ public class BubbleService extends Service {
             if (c.getResponseCode() != 200) {
                 String err = "HTTP " + c.getResponseCode();
                 try { err = new JSONObject(readAll(c)).optString("error", err); } catch (Exception e) {}
-                final String m = err; ui.post(new Runnable() { public void run() { finish("Hiba: " + m, false); } });
+                final String m = err; ui.post(new Runnable() { public void run() { finish(L.t("Hiba: ") + m, false); } });
                 return;
             }
             BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"));
@@ -610,14 +611,14 @@ public class BubbleService extends Service {
             ui.post(new Runnable() { public void run() { if (busy) finish(null, true); } });
         } catch (java.net.ConnectException e) {
             if (mayStartServer) {
-                ui.post(new Runnable() { public void run() { setStatus("A motor nem fut – indítom…"); } });
+                ui.post(new Runnable() { public void run() { setStatus(L.t("A motor nem fut – indítom…")); } });
                 startServer();
                 try { Thread.sleep(6000); } catch (InterruptedException ie) {}
                 runRequest(text, screen, fresh, false);
-            } else ui.post(new Runnable() { public void run() { finish("A motor nem fut. Nyisd meg a Claude Tablet appot.", false); } });
+            } else ui.post(new Runnable() { public void run() { finish(L.t("A motor nem fut. Nyisd meg a Claude Tablet appot."), false); } });
         } catch (Exception e) {
             final String m = e.getMessage();
-            ui.post(new Runnable() { public void run() { finish("Hiba: " + m, false); } });
+            ui.post(new Runnable() { public void run() { finish(L.t("Hiba: ") + m, false); } });
         } finally { if (c != null) c.disconnect(); }
     }
 
@@ -641,7 +642,7 @@ public class BubbleService extends Service {
         switch (k) {
             case "shot":
                 setOverlayVisible(true);
-                setStatus(e.optBoolean("ok") ? "Gondolkodom… (látom a képernyőt)" : "Gondolkodom… (képernyőkép nélkül)");
+                setStatus(e.optBoolean("ok") ? L.t("Gondolkodom… (látom a képernyőt)") : L.t("Gondolkodom… (képernyőkép nélkül)"));
                 break;
             case "run": runId = e.optString("runId"); break;
             case "overlay": setOverlayVisible(e.optBoolean("show")); break;
@@ -669,8 +670,8 @@ public class BubbleService extends Service {
             String d = in.optString("description", "");
             return d.isEmpty() ? clip(in.optString("command"), 50) : d;
         }
-        if (n.equals("Read")) return "Olvasom: " + new java.io.File(in.optString("file_path")).getName();
-        if (n.startsWith("Web")) return "Keresés a weben…";
+        if (n.equals("Read")) return L.t("Olvasom: ") + new java.io.File(in.optString("file_path")).getName();
+        if (n.startsWith("Web")) return L.t("Keresés a weben…");
         return n;
     }
     static String clip(String s, int n) { return s.length() > n ? s.substring(0, n) + "…" : s; }
@@ -707,7 +708,7 @@ public class BubbleService extends Service {
     void stopRun() {
         final String id = runId;
         if (id == null) return;
-        setStatus("Leállítás…");
+        setStatus(L.t("Leállítás…"));
         new Thread(new Runnable() { public void run() {
             try {
                 HttpURLConnection c = (HttpURLConnection) new URL(BASE + "api/stop").openConnection();
@@ -720,9 +721,9 @@ public class BubbleService extends Service {
 
     void launch(String pkg) {
         Intent i = pkg == null ? null : getPackageManager().getLaunchIntentForPackage(pkg);
-        if (i == null) { setStatus("Nincs ilyen app: " + pkg); return; }
+        if (i == null) { setStatus(L.t("Nincs ilyen app: ") + pkg); return; }
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try { startActivity(i); } catch (Exception e) { setStatus("Nem indítható: " + pkg); }
+        try { startActivity(i); } catch (Exception e) { setStatus(L.t("Nem indítható: ") + pkg); }
     }
 
     // ------------------------------------------------------------------ felolvasás, rezgés
@@ -732,7 +733,7 @@ public class BubbleService extends Service {
             pendingSpeak = text;
             tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() { public void onInit(int st) {
                 ttsReady = st == TextToSpeech.SUCCESS;
-                if (ttsReady) { tts.setLanguage(new Locale("hu", "HU")); if (pendingSpeak != null) speak(pendingSpeak); pendingSpeak = null; }
+                if (ttsReady) { tts.setLanguage(L.locale()); if (pendingSpeak != null) speak(pendingSpeak); pendingSpeak = null; }
             } });
             return;
         }
