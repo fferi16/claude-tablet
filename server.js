@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.13.0';
+const VERSION = '1.13.1';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -492,12 +492,20 @@ function inferProject(text) {
   if (!best || bestN < 5 || bestN < total * 0.4) return null; // nincs egyértelmű projekt
   for (;;) { // lefelé, amíg egy almappa viszi a többséget
     let nb = null, nn = 0;
+    // projekt gyökere (vagy nem gyűjtőmappa): nem megyünk lejjebb (pl. claude-tablet/android → claude-tablet)
+    if (isProjectRoot(path.join(HOME, ...best.split('/'))) || !CONTAINER_DIRS.has(best.split('/').pop().toLowerCase())) break;
     for (const [k, n] of kids(best)) if (n > nn) { nb = k; nn = n; }
     if (!nb || nn < bestN * 0.6 || !isDir(path.join(HOME, nb))) break;
     best = nb; bestN = nn;
   }
   return path.join(HOME, ...best.split('/'));
 }
+const ROOT_MARKERS = ['.git', 'package.json', 'CLAUDE.md', 'README.md', 'pyproject.toml', 'requirements.txt',
+  'Cargo.toml', 'go.mod', 'build.gradle', 'settings.gradle', 'pom.xml', 'Makefile', '.claude', 'server.js', 'main.py'];
+// gyűjtőmappák: ezekben a projektek egy szinttel lejjebb vannak
+const CONTAINER_DIRS = new Set(['documents', 'dokumentumok', 'desktop', 'asztal', 'programok', 'projects', 'projektek',
+  'source', 'repos', 'src', 'dev', 'code', 'work', 'munka', 'git', 'github', 'onedrive']);
+function isProjectRoot(dir) { return ROOT_MARKERS.some(f => fs.existsSync(path.join(dir, f))); }
 function allSessions(limit = 100) {
   const root = path.join(HOME, '.claude', 'projects'), files = [];
   let dirs = [];
