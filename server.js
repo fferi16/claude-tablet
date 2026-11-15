@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -453,11 +453,52 @@ function sessionSummary(fp, st) {
     if (first && cwd) break;
   }
   const r = { m: st.mtimeMs, cwd, bubble: !!first && first.startsWith('[Lebegő Claude-gomb'),
-              title: custom ? jsonStr(custom) : first ? first.slice(0, 90) : null };
+              title: custom ? jsonStr(custom) : first ? first.slice(0, 90) : null,
+              // a saját mappádban (pl. /root a tableten) indított beszélgetésnél: melyik projekten dolgozott valójában
+              group: cwd && samePath(cwd, HOME) ? inferProject(head + '\n' + tail) : null };
   sumCache.set(fp, r);
   return r;
 }
-function allSessions(limit = 60) {
+
+// ---- Valódi projekt kitalálása a saját mappában (HOME) futott beszélgetéshez ----
+// Megszámoljuk, a beszélgetés (fájlműveletek, parancsok) melyik HOME alatti mappára hivatkozik a legtöbbet,
+// és addig megyünk lefelé, amíg egy almappa viszi a hivatkozások többségét (pl. Documents → programok → X).
+// Csak a listában való csoportosításhoz kell: a beszélgetés továbbra is az eredeti mappában folytatódik.
+const IGNORE_DIRS = new Set(['tablet-shots', 'bin', 'tmp', 'node_modules', 'AppData', 'Downloads']);
+function normPath(p) { return String(p).replace(/\\/g, '/').replace(/\/+$/, ''); }
+function samePath(a, b) { a = normPath(a); b = normPath(b); return WIN ? a.toLowerCase() === b.toLowerCase() : a === b; }
+function inferProject(text) {
+  const home = normPath(HOME);
+  const esc = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Windowson a mappanévben szóköz is lehet (a találatot úgyis ellenőrizzük: létező mappa-e)
+  const seg = WIN ? '([^"\'\\t\\n/\\\\:*?<>|,;()`&=]+)' : '([^"\'\\s/\\\\:*?<>|,;()`&=]+)';
+  const re = new RegExp(esc + '/' + seg + '(?:/' + seg + ')?(?:/' + seg + ')?(?:/' + seg + ')?', WIN ? 'gi' : 'g');
+  const norm = text.replace(/\\\\/g, '/'); // JSON-ben a Windows-útvonal \\-sel van
+  const tree = new Map(); // "a", "a/b", "a/b/c" -> darabszám
+  for (const m of norm.matchAll(re)) {
+    const parts = [];
+    for (const p of m.slice(1)) { const t = (p || '').trim(); if (!t) break; parts.push(t); if (t !== p) break; } // szóköz után már nem útvonal
+    if (!parts.length || parts[0].startsWith('.') || IGNORE_DIRS.has(parts[0])) continue;
+    for (let i = 1; i <= parts.length && i <= 4; i++) {
+      if (parts[i - 1].startsWith('.')) break;
+      const k = parts.slice(0, i).join('/');
+      tree.set(k, (tree.get(k) || 0) + 1);
+    }
+  }
+  const kids = pre => [...tree].filter(([k]) => k.split('/').length === (pre ? pre.split('/').length + 1 : 1) && (!pre || k.startsWith(pre + '/')));
+  const total = kids('').reduce((a, [, n]) => a + n, 0);
+  let best = null, bestN = 0;
+  for (const [k, n] of kids('')) if (n > bestN && isDir(path.join(HOME, k))) { best = k; bestN = n; }
+  if (!best || bestN < 5 || bestN < total * 0.4) return null; // nincs egyértelmű projekt
+  for (;;) { // lefelé, amíg egy almappa viszi a többséget
+    let nb = null, nn = 0;
+    for (const [k, n] of kids(best)) if (n > nn) { nb = k; nn = n; }
+    if (!nb || nn < bestN * 0.6 || !isDir(path.join(HOME, nb))) break;
+    best = nb; bestN = nn;
+  }
+  return path.join(HOME, ...best.split('/'));
+}
+function allSessions(limit = 100) {
   const root = path.join(HOME, '.claude', 'projects'), files = [];
   let dirs = [];
   try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()); } catch {}
@@ -477,7 +518,7 @@ function allSessions(limit = 60) {
     let s; try { s = sessionSummary(x.fp, x.st); } catch { continue; }
     // csak olyat, amit a tablet meg is tud nyitni (az előzmény a projekt mappájából töltődik)
     if (!s.title || s.bubble || skipProject(s.cwd) || projDir(s.cwd) !== x.dir) continue;
-    out.push({ id: x.id, title: s.title, mtime: x.st.mtimeMs, cwd: s.cwd, live: Date.now() - x.st.mtimeMs < 120000 });
+    out.push({ id: x.id, title: s.title, mtime: x.st.mtimeMs, cwd: s.cwd, group: s.group || s.cwd, live: Date.now() - x.st.mtimeMs < 120000 });
   }
   return out;
 }

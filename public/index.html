@@ -38,6 +38,13 @@ aside{background:var(--panel);border-right:1px solid var(--line);display:flex;fl
 .sess:active,.sess.on{background:var(--panel2)}
 .sess .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px}
 .sess .d{color:var(--muted);font-size:12.5px}
+.sess.in{padding-left:30px}
+.sgrp{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:14px 12px 4px;font-size:14.5px;font-weight:600;color:var(--text);min-height:40px}
+.sgrp .ar{width:14px;color:var(--muted);font-size:12px}
+.sgrp .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sgrp .n{margin-left:auto;color:var(--muted);font-weight:400;font-size:12.5px}
+.sgrp.cur .nm{color:var(--accent2)}
+.smore{display:block;width:100%;text-align:left;padding:4px 12px 8px 30px;color:var(--accent2);font-size:13px;min-height:32px}
 .foot{border-top:1px solid var(--line);padding:10px 12px calc(10px + var(--safe-b));display:grid;gap:8px}
 .foot label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
 select{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;max-width:190px}
@@ -205,7 +212,7 @@ const EN = {
 'Parancs':'Command','Olvasás':'Read','Szerkesztés':'Edit','Írás':'Write','Keresés':'Search','Fájlkeresés':'Find files','Weblap':'Web page','Webkeresés':'Web search',
 'Al-ügynök':'Subagent','Teendők':'To-dos','Miben segíthetek?':'How can I help?','Projekt:':'Project:','Projekt':'Project',
 'Még nincs beszélgetés ebben a projektben.':'No chats in this project yet.','Beszélgetés':'Chat','Várj, még tart a feltöltés…':'Wait, upload in progress…',
-'Válassz projektet':'Choose a project','Legutóbbiak':'Recent','Saját mappa':'Home folders','Claude Code projektek ezen a gépen':'Claude Code projects on this machine','most aktív':'active now','Összes projekt':'All projects','Ez a projekt':'This project','Még nincs beszélgetés.':'No conversations yet.','Ez a beszélgetés most máshol is nyitva van (pl. a gépen a Claude appban). Ha innen folytatod, a két hely nem látja egymás új üzeneteit. Folytatod?':'This conversation is open somewhere else right now (e.g. in the Claude app on the computer). If you continue here, the two places will not see each other’s new messages. Continue?','Tallózás…':'Browse…','Eltávolítás':'Remove','Már csatolva':'Already attached',
+'Válassz projektet':'Choose a project','Legutóbbiak':'Recent','Saját mappa':'Home folders','Claude Code projektek ezen a gépen':'Claude Code projects on this machine','most aktív':'active now','Összes projekt':'All projects','Ez a projekt':'This project','Még nincs beszélgetés.':'No conversations yet.','futott itt:':'ran in:','további':'more','Kevesebb':'Show less','Ez a beszélgetés most máshol is nyitva van (pl. a gépen a Claude appban). Ha innen folytatod, a két hely nem látja egymás új üzeneteit. Folytatod?':'This conversation is open somewhere else right now (e.g. in the Claude app on the computer). If you continue here, the two places will not see each other’s new messages. Continue?','Tallózás…':'Browse…','Eltávolítás':'Remove','Már csatolva':'Already attached',
 'A vágólap üres':'Clipboard is empty','Nyomd hosszan a beviteli mezőt, és válaszd a Beillesztést':'Long-press the input field and choose Paste','Üres mappa.':'Empty folder.',
 '📕 PDF – csatold, és Claude elolvassa.':'📕 PDF – attach it and Claude will read it.','Nem sikerült':'Failed','A futó válasz után újraindul…':'Restarting after the current reply…',
 'Újraindítás…':'Restarting…','Diktálás leállítása':'Stop dictation','Hallgatlak… beszélj':'Listening… speak','Nem hallottam semmit.':'I didn\'t hear anything.',
@@ -568,13 +575,39 @@ async function loadSessions() {
   $('#sessScope').textContent = all ? tr('Összes projekt') + ' ▾' : tr('Ez a projekt') + ' ▾';
   state.live = new Set(list.filter(s => s.live).map(s => s.id)); // máshol (pl. a gépen) épp nyitott beszélgetések
   el.innerHTML = list.length ? '' : `<div style="color:var(--muted);padding:12px;font-size:14px">${all ? tr('Még nincs beszélgetés.') : tr('Még nincs beszélgetés ebben a projektben.')}</div>`;
-  for (const s of list) {
-    const b = document.createElement('button'); b.className = 'sess' + (s.id === state.session ? ' on' : '');
-    const proj = all && s.cwd ? `<span style="color:${s.cwd === state.cwd ? 'var(--accent2)' : 'var(--text)'}">📁 ${esc(base(s.cwd))}</span> · ` : '';
+  const row = (s, inGroup) => {
+    const b = document.createElement('button'); b.className = 'sess' + (inGroup ? ' in' : '') + (s.id === state.session ? ' on' : '');
     const cnt = all ? '' : ` · ${s.count} ${LANG === 'en' && s.count === 1 ? 'message' : tr('üzenet')}`;
-    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${proj}${ago(s.mtime)}${cnt}${s.live ? ` · <span style="color:var(--ok)">● ${tr('most aktív')}</span>` : ''}</div>`;
+    // a saját mappában (pl. /root) futott, de a tartalma alapján máshová sorolt beszélgetés: hol fut tovább
+    const ran = all && s.group && s.cwd && s.group !== s.cwd ? ` · ${tr('futott itt:')} ${esc(base(s.cwd))}` : '';
+    b.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.mtime)}${cnt}${ran}${s.live ? ` · <span style="color:var(--ok)">● ${tr('most aktív')}</span>` : ''}</div>`;
     b.onclick = () => { if (all && s.cwd && s.cwd !== state.cwd) useProject(s.cwd); openSession(s.id, s.title); };
-    el.append(b);
+    return b;
+  };
+  if (!all) { for (const s of list) el.append(row(s, false)); return; }
+  // csoportosítás projektenként (mint a gépen a Claude app): a legutóbb használt projekt felül
+  const groups = new Map();
+  for (const s of list) { const g = s.group || s.cwd || '?'; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(s); }
+  const collapsed = new Set(store.get('sessCollapsed', []));
+  state.sessMore = state.sessMore || new Set();
+  const SHOW = 5;
+  for (const [g, items] of groups) {
+    const h = document.createElement('button');
+    const closed = collapsed.has(g);
+    h.className = 'sgrp' + (g === state.cwd ? ' cur' : '');
+    h.innerHTML = `<span class="ar">${closed ? '▸' : '▾'}</span> 📁 <span class="nm">${esc(base(g))}</span><span class="n">${items.length}${items.some(s => s.live) ? ' <span style="color:var(--ok)">●</span>' : ''}</span>`;
+    h.title = g;
+    h.onclick = () => { closed ? collapsed.delete(g) : collapsed.add(g); store.set('sessCollapsed', [...collapsed]); loadSessions(); };
+    el.append(h);
+    if (closed) continue;
+    const showAll = state.sessMore.has(g);
+    items.slice(0, showAll ? items.length : SHOW).forEach(s => el.append(row(s, true)));
+    if (items.length > SHOW) {
+      const m = document.createElement('button'); m.className = 'smore';
+      m.textContent = showAll ? tr('Kevesebb') : `+${items.length - SHOW} ${tr('további')}`;
+      m.onclick = () => { showAll ? state.sessMore.delete(g) : state.sessMore.add(g); loadSessions(); };
+      el.append(m);
+    }
   }
 }
 /** projektváltás új beszélgetés nyitása nélkül (amikor egy másik projekt beszélgetésére koppintasz) */
