@@ -15,3 +15,6 @@ build/
 node_modules/
 .claude-uploads/
 *.log
+
+# a kész, letölthető APK kivétel
+!dist/claude-tablet.apk

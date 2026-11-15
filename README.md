@@ -41,7 +41,9 @@ Android app (hu.claudetablet)          Termux                         PRoot Ubun
    echo "allow-external-apps=true" >> ~/.termux/termux.properties
    termux-reload-settings
    ```
-4. APK build és telepítés – lásd lent. Első indításkor engedélyezd a „Parancsok futtatása a Termux környezetben”
+4. Az app telepítése: töltsd le a kész APK-t a tabletre –
+   **[claude-tablet.apk](https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk)** (`dist/` mappa) –,
+   és nyisd meg (engedélyezd az „ismeretlen forrásból” telepítést). Saját buildhez lásd lent. Első indításkor engedélyezd a „Parancsok futtatása a Termux környezetben”
    engedélyt, a lebegő buborékhoz a „Megjelenítés más appok fölött” engedélyt is.
 5. *Opcionális:* ha azt szeretnéd, hogy az app induláskor bekapcsolja a vezeték nélküli hibakeresést (hogy Claude
    ADB-n át vezérelhesse a tabletet), egyszer add meg számítógépről:
@@ -59,7 +61,8 @@ Gradle nincs, a szkriptek közvetlenül hívják az `aapt2` / `javac` / `d8` / `
   A tabletes `r8.jar`/`android.jar` a `TSDK` környezeti változóval adható meg.
 
 A repó **nem tartalmaz aláírókulcsot**; ha nincs `android/debug.keystore`, a build generál egyet. Egy már telepített
-app fölé csak ugyanazzal a kulccsal lehet frissíteni.
+app fölé csak ugyanazzal a kulccsal lehet frissíteni – a `dist/` APK-ra tehát csak egy újabb `dist/` APK telepíthető
+frissítésként; ha saját buildre váltasz, előbb töröld a régi appot.
 
 ## Xiaomi / HyperOS
 
