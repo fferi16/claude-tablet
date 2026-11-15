@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "1.8.0",
+  "versionCode": 13,
+  "versionName": "1.9.0",
   "apk": "https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk",
-  "notes": "Angol felület / English UI (automatikus vagy a menüben választható)"
+  "notes": "PC-s beszélgetések a tableten: Menü → ＋ Gép (start-pc a gépen)"
 }

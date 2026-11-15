@@ -109,7 +109,58 @@ public class MainActivity extends Activity {
 
         takeShare(getIntent());
         takeBubble(getIntent());
-        startPolling();
+        loadEngine();
+        // távoli gép (PC) választva: nem kell a helyi motort megvárni
+        if (remoteHost != null) showWeb(); else startPolling();
+    }
+
+    // ------------------------------------------------------------------ gépek (helyi tablet / PC a hálózaton)
+
+    /** a kiválasztott távoli gép host:port-ja, vagy null = ez a tablet */
+    static volatile String remoteHost;
+    String remoteCode;
+
+    org.json.JSONArray engines() {
+        try { return new org.json.JSONArray(getSharedPreferences("app", MODE_PRIVATE).getString("engines", "[]")); }
+        catch (Exception e) { return new org.json.JSONArray(); }
+    }
+
+    void loadEngine() {
+        int i = getSharedPreferences("app", MODE_PRIVATE).getInt("engine", -1);
+        JSONObject e = i >= 0 ? engines().optJSONObject(i) : null;
+        remoteHost = e == null ? null : e.optString("host", null);
+        remoteCode = e == null ? null : e.optString("code", "");
+    }
+
+    String engineBase() { return remoteHost == null ? BASE : "http://" + remoteHost + "/"; }
+    /** belépő URL: távoli gépnél a párosító kóddal (a szerver sütit ad, és továbbirányít) */
+    String engineEntry(String extra) {
+        if (remoteHost == null) return BASE + (extra == null ? "" : "?" + extra);
+        return engineBase() + "?token=" + Uri.encode(remoteCode) + (extra == null ? "" : "&" + extra);
+    }
+
+    void switchEngine(int i) {
+        getSharedPreferences("app", MODE_PRIVATE).edit().putInt("engine", i).apply();
+        loadEngine();
+        if (remoteHost == null) {
+            // vissza a tabletre: ha a helyi motor nem fut, a szokásos indítás/várakozás jön
+            webShown = false; web.setVisibility(View.INVISIBLE); splash.setVisibility(View.VISIBLE);
+            startTried = false; wakeTried = false; startPolling();
+        } else {
+            webShown = false; polling = false; showWeb();
+        }
+    }
+
+    void showRemoteError() {
+        String name = remoteHost;
+        try { JSONObject e = engines().optJSONObject(getSharedPreferences("app", MODE_PRIVATE).getInt("engine", -1)); if (e != null) name = e.optString("name", remoteHost); } catch (Exception x) {}
+        String html = "<html><body style='background:#1a1915;color:#ece9e1;font:17px sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:90vh;text-align:center;padding:20px'>"
+                + "<div style='font-size:42px'>🖥️</div><h2>" + android.text.TextUtils.htmlEncode(L.t("Nem érem el: ") + name) + "</h2>"
+                + "<p style='color:#a6a39a;max-width:520px'>" + L.t("Fut a motor a gépen (start-pc), és ugyanazon a Wi-Fin vagytok? Első indításkor a Windows tűzfalon engedélyezni kell.") + "</p>"
+                + "<button onclick='ClaudeApp.retryEngine()' style='font:inherit;padding:12px 22px;margin:8px;border-radius:12px;border:0;background:#d97757;color:#fff'>" + L.t("Újrapróbálás") + "</button>"
+                + "<button onclick='ClaudeApp.switchEngine(-1)' style='font:inherit;padding:12px 22px;margin:8px;border-radius:12px;border:1px solid #444;background:#26251f;color:#ece9e1'>" + L.t("Vissza a tabletre") + "</button>"
+                + "</body></html>";
+        web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
 
     @Override
@@ -180,7 +231,7 @@ public class MainActivity extends Activity {
 
     /** Visszatéréskor és időnként: ha a motor leállt vagy lefagyott, ne akadjon meg a felület. */
     void checkServerOnResume() {
-        if (!webShown || resumeCheck) { scheduleWatch(); return; }
+        if (!webShown || resumeCheck || remoteHost != null) { scheduleWatch(); return; }
         if (Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode()) { scheduleWatch(); return; }
         resumeCheck = true;
         new Thread(new Runnable() {
@@ -335,7 +386,7 @@ public class MainActivity extends Activity {
 
     String shareUrl() {
         try {
-            return BASE + "?share=" + URLEncoder.encode(pendingShare, "UTF-8").replace("+", "%20");
+            return engineEntry("share=" + URLEncoder.encode(pendingShare, "UTF-8").replace("+", "%20"));
         } catch (Exception e) {
             return BASE;
         }
@@ -370,6 +421,10 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                 // a szerver leállt: vissza az indítóképernyőre
+                if (r.isForMainFrame() && remoteHost != null && r.getUrl().getHost() != null && remoteHost.startsWith(r.getUrl().getHost() + ":")) {
+                    ui.post(new Runnable() { public void run() { showRemoteError(); } });
+                    return;
+                }
                 if (r.isForMainFrame() && isLocal(r.getUrl())) {
                     ui.post(new Runnable() { public void run() { serverLost(); } });
                 }
@@ -404,6 +459,7 @@ public class MainActivity extends Activity {
         String sch = u.getScheme();
         if (sch != null && (sch.equals("javascript") || sch.equals("about") || sch.equals("data") || sch.equals("blob")))
             return true;
+        if (h != null && remoteHost != null && remoteHost.startsWith(h + ":")) return true;
         return h != null && (h.equals("127.0.0.1") || h.equals("localhost"));
     }
 
@@ -421,7 +477,7 @@ public class MainActivity extends Activity {
         if (webShown) return;
         webShown = true;
         polling = false;
-        String url = pendingShare != null ? shareUrl() : BASE;
+        String url = pendingShare != null ? shareUrl() : engineEntry(null);
         pendingShare = null;
         web.loadUrl(url);
         web.setVisibility(View.VISIBLE);
@@ -801,6 +857,46 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public boolean bubbleOn() { return BubbleService.running; }
+        /** gépek: {cur: index (-1 = ez a tablet), list: [{name, host}]} */
+        @JavascriptInterface public String engines() {
+            JSONObject o = new JSONObject();
+            try {
+                org.json.JSONArray src = MainActivity.this.engines(), out = new org.json.JSONArray();
+                for (int i = 0; i < src.length(); i++) { JSONObject e = src.getJSONObject(i); out.put(new JSONObject().put("name", e.optString("name")).put("host", e.optString("host"))); }
+                o.put("cur", getSharedPreferences("app", MODE_PRIVATE).getInt("engine", -1)); o.put("list", out);
+            } catch (Exception e) {}
+            return o.toString();
+        }
+        @JavascriptInterface public void switchEngine(final int i) {
+            ui.post(new Runnable() { public void run() { MainActivity.this.switchEngine(i); } });
+        }
+        @JavascriptInterface public void retryEngine() {
+            ui.post(new Runnable() { public void run() { MainActivity.this.switchEngine(getSharedPreferences("app", MODE_PRIVATE).getInt("engine", -1)); } });
+        }
+        /** új gép: host = "192.168.1.50" vagy "192.168.1.50:8765", code = a gépen kiírt kód; visszaad: hibaüzenet vagy "" */
+        @JavascriptInterface public String addEngine(String name, String host, String code) {
+            host = host == null ? "" : host.trim().replaceFirst("^https?://", "").replaceAll("/.*$", "");
+            if (!host.matches("[A-Za-z0-9.\\-]+(:\\d{1,5})?")) return L.t("Hibás cím");
+            if (!host.contains(":")) host += ":8765";
+            code = code == null ? "" : code.trim();
+            if (code.isEmpty()) return L.t("Hiányzik a kód");
+            try {
+                org.json.JSONArray a = MainActivity.this.engines();
+                a.put(new JSONObject().put("name", name == null || name.trim().isEmpty() ? "PC" : name.trim()).put("host", host).put("code", code));
+                getSharedPreferences("app", MODE_PRIVATE).edit().putString("engines", a.toString()).apply();
+                final int idx = a.length() - 1;
+                ui.post(new Runnable() { public void run() { MainActivity.this.switchEngine(idx); } });
+                return "";
+            } catch (Exception e) { return String.valueOf(e.getMessage()); }
+        }
+        @JavascriptInterface public void removeEngine(final int i) {
+            try {
+                org.json.JSONArray a = MainActivity.this.engines(), b = new org.json.JSONArray();
+                for (int k = 0; k < a.length(); k++) if (k != i) b.put(a.get(k));
+                getSharedPreferences("app", MODE_PRIVATE).edit().putString("engines", b.toString()).apply();
+            } catch (Exception e) {}
+            ui.post(new Runnable() { public void run() { MainActivity.this.switchEngine(-1); } });
+        }
         @JavascriptInterface public String sysLang() { return java.util.Locale.getDefault().toLanguageTag(); }
         /** "auto" | "hu" | "en" – a natív részek (panel, értesítések, súgó) is ezt követik */
         @JavascriptInterface public void setLang(String v) {

@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -19,19 +19,23 @@ const PUB = path.join(__dirname, 'public');
 const CFG_FILE = path.join(HOME, '.claude-tablet.json');
 // A `claude` általában a /usr/local/bin-ben van – legyen mindig a PATH-on (pl. Termuxból indítva).
 for (const d of ['/usr/local/bin', path.join(HOME, '.local', 'bin'), path.join(HOME, '.npm-global', 'bin'), path.join(__dirname, 'bin')])
-  if (!(process.env.PATH || '').split(':').includes(d)) process.env.PATH = (process.env.PATH ? process.env.PATH + ':' : '') + d;
+  if (!(process.env.PATH || '').split(path.delimiter).includes(d)) process.env.PATH = (process.env.PATH ? process.env.PATH + path.delimiter : '') + d;
 
 // A `claude` futtatható megkeresése (abszolút útvonal vagy PATH). null, ha nincs.
+const WIN = process.platform === 'win32';
 function findClaude() {
-  const isExe = f => { try { fs.accessSync(f, fs.constants.X_OK); return fs.statSync(f).isFile(); } catch { return false; } };
-  if (CLAUDE.includes('/')) return isExe(CLAUDE) ? CLAUDE : null;
-  for (const d of (process.env.PATH || '').split(':')) if (d && isExe(path.join(d, CLAUDE))) return path.join(d, CLAUDE);
+  const isExe = f => { try { fs.accessSync(f, WIN ? fs.constants.F_OK : fs.constants.X_OK); return fs.statSync(f).isFile(); } catch { return false; } };
+  const exts = WIN ? ['.exe', '.cmd', ''] : [''];
+  if (CLAUDE.includes('/') || CLAUDE.includes('\\')) return isExe(CLAUDE) ? CLAUDE : null;
+  for (const d of (process.env.PATH || '').split(path.delimiter))
+    for (const e of exts) if (d && isExe(path.join(d, CLAUDE + e))) return path.join(d, CLAUDE + e);
   return null;
 }
 function log(...a) { console.log(new Date().toISOString(), ...a); }
 // Ha nem csak localhoston fut, token kell (a tablet böngészője ?token=... linkkel nyitja).
+// A párosító kód megmarad újraindítás után is (a tablet appban egyszer kell megadni).
 const TOKEN = HOST === '127.0.0.1' || HOST === 'localhost' ? null
-  : (process.env.TOKEN || crypto.randomBytes(12).toString('hex'));
+  : (process.env.TOKEN || (() => { const c = loadCfg(); if (!c.token) { c.token = crypto.randomBytes(4).toString('hex'); saveCfg(c); } return c.token; })());
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const runs = new Map(); // runId -> child process
@@ -183,7 +187,7 @@ function send(req, res, body, hooks = {}) {
 
   const runId = crypto.randomUUID();
   const t0 = Date.now();
-  const child = spawn(bin, args, { cwd, env: { ...process.env, FORCE_COLOR: '0' } });
+  const child = spawn(bin, args, { cwd, env: { ...process.env, FORCE_COLOR: '0' }, shell: WIN && /\.cmd$/i.test(bin), windowsHide: true });
   runs.set(runId, child);
   log(`run start ${runId.slice(0, 8)} cwd=${cwd} session=${body.sessionId || 'new'} mode=${body.mode || '-'}`);
   child.stdin.on('error', () => {}); // ha a folyamat nem indult el, ne dőljön el a szerver (EPIPE)
@@ -447,7 +451,8 @@ const server = http.createServer(async (req, res) => {
   if (TOKEN) {
     const cookieOk = (req.headers.cookie || '').includes('ct_token=' + TOKEN);
     if (u.searchParams.get('token') === TOKEN) {
-      res.writeHead(302, { 'Set-Cookie': `ct_token=${TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`, Location: '/' });
+      u.searchParams.delete('token'); const rest = u.searchParams.toString();
+      res.writeHead(302, { 'Set-Cookie': `ct_token=${TOKEN}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`, Location: '/' + (rest ? '?' + rest : '') });
       return res.end();
     }
     if (!cookieOk) { res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Hiányzó token – nyisd meg a szerver által kiírt linket.'); }
@@ -525,7 +530,7 @@ server.listen(PORT, HOST, () => {
   console.log('  Nyisd meg a böngészőben:  ' + url);
   if (TOKEN) {
     for (const ifs of Object.values(os.networkInterfaces())) for (const i of ifs || [])
-      if (i.family === 'IPv4' && !i.internal) console.log(`  Más eszközről:            http://${i.address}:${PORT}/?token=${TOKEN}`);
+      if (i.family === 'IPv4' && !i.internal) console.log(`  Más eszközről:            http://${i.address}:${PORT}/?token=${TOKEN}\n  Claude Tablet app → Menü → ＋ Gép:  cím ${i.address}:${PORT}   kód ${TOKEN}`);
   }
   console.log('  Leállítás: Ctrl+C\n');
 });

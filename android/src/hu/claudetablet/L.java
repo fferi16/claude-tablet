@@ -125,6 +125,11 @@ public final class L {
         M.put("A Termux nem indítható", "Cannot start Termux");
         M.put("Kézi indítás", "Manual start");
         M.put("Ha az automatikus indítás nem megy, indítsd el kézzel a Termuxban, majd koppints az Újrapróbálás gombra:", "If automatic start fails, start it manually in Termux, then tap Retry:");
+        M.put("Nem érem el: ", "Can't reach: ");
+        M.put("Fut a motor a gépen (start-pc), és ugyanazon a Wi-Fin vagytok? Első indításkor a Windows tűzfalon engedélyezni kell.", "Is the engine running on that computer (start-pc), and are you on the same Wi-Fi? On first start, allow it in the Windows firewall.");
+        M.put("Vissza a tabletre", "Back to this tablet");
+        M.put("Hibás cím", "Invalid address");
+        M.put("Hiányzik a kód", "Code is missing");
         M.put("Panel hiba: ", "Panel error: ");
         M.put("Előbb jelölj ki szöveget (kijelölés → Claude)", "Select some text first (selection → Claude)");
     }

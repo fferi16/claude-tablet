@@ -58,6 +58,18 @@ képernyőképhez). Ha a kapcsoló szürke: App-infó → ⋮ → *Korlátozott 
 
 Csak böngészőből, app nélkül: `./start.sh`, majd `http://127.0.0.1:8765/`.
 
+## PC-s beszélgetések a tableten
+
+A motor a PC-n is futhat; a tablet appban a menü tetején válthatsz *Ez a tablet* és a PC között. PC-n a PC beszélgetéseit
+látod, és ott folytatod őket – a PC fájljaival, a PC-n futó Claude Code-dal.
+
+1. A PC-n: Node.js 18+ és Claude Code (bejelentkezve), majd klónozd ezt a repót.
+2. Indítsd: **Windows:** `start-pc.cmd` (dupla kattintás) · **Mac/Linux:** `./start-pc.sh`.
+   Kiírja a címet és a **kódot**. Windowson az első indításkor engedélyezd a tűzfalban (*Magánhálózat*).
+3. Tablet app → Menü → **＋** → név, cím (pl. `192.168.1.50:8765`), kód → *Hozzáadás*.
+
+A két eszköz legyen ugyanazon a Wi-Fin. A kód megmarad a PC-n (`~/.claude-tablet.json`), újraindítás után sem kell újra megadni.
+
 ## APK build
 
 Gradle nincs, a szkriptek közvetlenül hívják az `aapt2` / `javac` / `d8` / `apksigner` eszközöket.

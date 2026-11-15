@@ -97,6 +97,7 @@ textarea{flex:1;resize:none;border:0;outline:0;background:none;color:var(--text)
 /* --- mappaválasztó --- */
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:18px;padding:0;width:min(560px,94vw);max-height:84dvh}
 dialog::backdrop{background:#0008}
+.engIn{font:inherit;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
 #setup .row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
 #setup .ic{font-size:20px;width:26px;text-align:center}
 #setup .tx{flex:1;min-width:0}#setup .tx small{display:block;color:var(--dim);margin-top:2px}
@@ -211,13 +212,16 @@ const EN = {
 '✗ Kikapcsolva – bekapcsolás':'✗ Off – turn on','… Be, kapcsolódik a motorhoz':'… On, connecting to engine','✓ Működik':'✓ Working',
 'Motor (Termux + szerver)':'Engine (Termux + server)','Fut':'Running','Claude Code telepítve':'Claude Code installed','Megvan':'Installed',
 'Ubuntuban: npm install -g @anthropic-ai/claude-code':'In Ubuntu: npm install -g @anthropic-ai/claude-code','Bejelentkezve Claude-ba':'Signed in to Claude','Rendben':'OK',
-'Ubuntuban egyszer futtasd: claude (és jelentkezz be)':'Run once in Ubuntu: claude (and sign in)','Értesítések':'Notifications','Szól, ha egy hosszú feladat elkészült':'Tells you when a long task finishes',
+'A motor gépén egyszer futtasd: claude (és jelentkezz be)':'Run once on the engine machine: claude (and sign in)','Értesítések':'Notifications','Szól, ha egy hosszú feladat elkészült':'Tells you when a long task finishes',
 'Mikrofon':'Microphone','Nincs beszédfelismerő – telepítsd a Google appot':'No speech recognizer – install the Google app','Diktáláshoz':'For dictation',
 'Lebegő gomb engedély':'Floating button permission','„Megjelenítés más alkalmazások felett”':'“Display over other apps”','Tabletvezérlés':'Tablet control',
 'Akadálymentesség → Claude Tablet. Ha szürke: App-infó → ⋮ → „Korlátozott beállítások engedélyezése”':'Accessibility → Claude Tablet. If greyed out: App info → ⋮ → “Allow restricted settings”',
 'Akadálymentesség → Claude Tablet – tabletvezérlés':'Accessibility → Claude Tablet – tablet control','Működik (képernyőkép, koppintás, gépelés)':'Working (screenshot, tap, typing)',
 'Be van kapcsolva, kapcsolódik a motorhoz…':'Enabled, connecting to engine…','Megadás':'Grant','App-infó':'App info','Nyelv / Language':'Language / Nyelv',
-'Automatikus / Auto':'Auto','Limit: nincs adat':'Limit: no data','Kontextus: még üres':'Context: empty',
+'Automatikus / Auto':'Auto','Ez a tablet':'This tablet','Gép hozzáadása':'Add computer','Név (pl. Irodai PC)':'Name (e.g. Office PC)',
+'Cím (pl. 192.168.1.50:8765)':'Address (e.g. 192.168.1.50:8765)','Kód':'Code','Hozzáadás':'Add','Kiválasztott gép törlése':'Remove selected computer',
+'Törlöd ezt a gépet a listából?':'Remove this computer from the list?','A gépen indítsd el a motort:':'Start the engine on the computer:','(Windows) vagy':'(Windows) or',
+'. Kiírja a címet és a kódot. Ugyanazon a Wi-Fin kell lennetek.':'. It prints the address and the code. Both devices must be on the same Wi-Fi.','Limit: nincs adat':'Limit: no data','Kontextus: még üres':'Context: empty',
 // sablonok darabjai (t()-vel hívva)
 'most':'now',' perce':' min ago',' órája':' h ago','üzenet':'messages','Új verzió':'New version','Feltöltési hiba: ':'Upload error: ','Nem olvasható: ':'Cannot read: ',
 'Bináris fájl':'Binary file','előnézet nem érhető el.':'no preview available.','Felismerési hiba: ':'Recognition error: ','Nem sikerült megnyitni: ':'Could not open: ',
@@ -257,6 +261,10 @@ if (LANG === 'en') {
   <div class="scrim" onclick="drawer(false)"></div>
   <aside>
     <div class="brand"><svg viewBox="0 0 24 24" fill="#d97757"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/><circle cx="19" cy="19" r="2"/></svg>Claude Tablet</div>
+    <div id="engRow" style="display:none;margin:0 12px 6px;gap:8px;align-items:center">
+      <select id="engSel" onchange="engSwitch(this.value)" style="flex:1;font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--text)"></select>
+      <button class="chip" onclick="engDlg.showModal()" title="Gép hozzáadása" aria-label="Gép hozzáadása" style="padding:10px 14px">＋</button>
+    </div>
     <div class="sect">Projekt</div>
     <button class="proj" onclick="openPicker()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -344,6 +352,19 @@ if (LANG === 'en') {
   <div style="display:flex;gap:8px;padding:0 16px 16px;justify-content:flex-end">
     <button class="fix chip" onclick="chipsTa.value='';ClaudeApp.setChips('');chipsTa.value=ClaudeApp.getChips();toast('Alapértelmezett visszaállítva')">Alapértelmezett</button>
     <button class="fix chip" onclick="ClaudeApp.setChips(chipsTa.value);chipsDlg.close();toast('Mentve – a panel következő megnyitásakor frissül')">Mentés</button></div>
+</dialog>
+<dialog id="engDlg">
+  <div style="display:flex;align-items:center;padding:14px 16px"><b style="flex:1;font-size:17px">Gép hozzáadása</b>
+    <button class="ib" onclick="engDlg.close()" aria-label="Bezár">✕</button></div>
+  <div style="padding:0 16px;color:var(--dim);font-size:14px;line-height:1.5">A gépen indítsd el a motort: <b>start-pc.cmd</b> (Windows) vagy <b>start-pc.sh</b>. Kiírja a címet és a kódot. Ugyanazon a Wi-Fin kell lennetek.</div>
+  <div style="display:grid;gap:10px;padding:14px 16px">
+    <input id="engName" placeholder="Név (pl. Irodai PC)" class="engIn">
+    <input id="engHost" placeholder="Cím (pl. 192.168.1.50:8765)" inputmode="url" class="engIn">
+    <input id="engCode" placeholder="Kód" autocapitalize="off" class="engIn">
+  </div>
+  <div style="display:flex;gap:8px;padding:0 16px 16px;justify-content:flex-end">
+    <button class="fix chip" id="engDel" style="display:none;margin-right:auto" onclick="engRemove()">Kiválasztott gép törlése</button>
+    <button class="fix chip" onclick="engAdd()">Hozzáadás</button></div>
 </dialog>
 <dialog id="setup">
   <div style="display:flex;align-items:center;padding:14px 16px"><b style="flex:1;font-size:17px">Beállítás-ellenőrző</b>
@@ -1020,7 +1041,7 @@ async function setupItems() {
   return [
     { ok: true, t: 'Motor (Termux + szerver)', d: 'Fut' + (h.version ? ' – ' + h.version : '') },
     { ok: !!h.claude, t: 'Claude Code telepítve', d: h.claude ? 'Megvan' : 'Ubuntuban: npm install -g @anthropic-ai/claude-code' },
-    { ok: !!h.login, t: 'Bejelentkezve Claude-ba', d: h.login ? 'Rendben' : 'Ubuntuban egyszer futtasd: claude (és jelentkezz be)' },
+    { ok: !!h.login, t: 'Bejelentkezve Claude-ba', d: h.login ? 'Rendben' : 'A motor gépén egyszer futtasd: claude (és jelentkezz be)' },
     { ok: p.notif, t: 'Értesítések', d: 'Szól, ha egy hosszú feladat elkészült', fix: 'notif' },
     { ok: p.mic, t: 'Mikrofon', d: p.voice === false ? 'Nincs beszédfelismerő – telepítsd a Google appot' : 'Diktáláshoz', fix: 'mic' },
     { ok: p.overlay, t: 'Lebegő gomb engedély', d: '„Megjelenítés más alkalmazások felett”', fix: 'overlay' },
@@ -1043,6 +1064,28 @@ async function openSetup() {
 }
 // visszatérve a beállításokból frissül a lista
 document.addEventListener('visibilitychange', () => { if (!document.hidden && setupDlg.open) openSetup(); });
+// ---- Gépek: ez a tablet vagy egy PC a hálózaton (a motor ott fut, ott vannak a beszélgetések és a fájlok) ----
+const engDlg = document.getElementById('engDlg');
+function engLoad() {
+  let e = { cur: -1, list: [] }; try { e = JSON.parse(ClaudeApp.engines()); } catch {}
+  const sel = document.getElementById('engSel'); sel.innerHTML = '';
+  const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
+  opt(-1, '📱 ' + tr('Ez a tablet'));
+  e.list.forEach((x, i) => opt(i, '🖥️ ' + x.name + ' (' + x.host.replace(/:8765$/, '') + ')'));
+  sel.value = String(e.cur);
+  document.getElementById('engRow').style.display = 'flex';
+  document.getElementById('engDel').style.display = e.cur >= 0 ? '' : 'none';
+}
+function engSwitch(v) { drawer(false); ClaudeApp.switchEngine(+v); }
+function engAdd() {
+  const err = ClaudeApp.addEngine(document.getElementById('engName').value, document.getElementById('engHost').value, document.getElementById('engCode').value);
+  if (err) return toast(err);
+  engDlg.close(); drawer(false);
+}
+function engRemove() {
+  let e = { cur: -1 }; try { e = JSON.parse(ClaudeApp.engines()); } catch {}
+  if (e.cur >= 0 && confirm(tr('Törlöd ezt a gépet a listából?'))) { engDlg.close(); ClaudeApp.removeEngine(e.cur); }
+}
 // ---- Frissítés-értesítés: a GitHubon lévő dist/version.json alapján, naponta egyszer ----
 const UPD_URL = 'https://raw.githubusercontent.com/fferi16/claude-tablet/main/dist/version.json';
 function updLater() { document.getElementById('updbar').style.display = 'none'; localStorage.setItem('ct_updSkip', String(Date.now())); }
@@ -1064,6 +1107,7 @@ async function checkUpdate(force) {
   const A = window.ClaudeApp; if (!A || !A.perms) return;
   document.getElementById('setupBtn').style.display = '';
   if (A.getChips) document.getElementById('chipsBtn').style.display = '';
+  if (A.engines) engLoad();
   setTimeout(async () => {
     const items = await setupItems();
     if (!localStorage.getItem('ct_setupSeen') && items.some(i => !i.ok)) { localStorage.setItem('ct_setupSeen', '1'); openSetup(); }
