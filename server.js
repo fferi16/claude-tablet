@@ -9,7 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const VERSION = '1.13.1';
+const VERSION = '1.14.1';
 const https = require('https');
 const PORT = Number(process.env.PORT || 8765);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -141,8 +141,8 @@ function listSessions(cwd) {
       }
     } catch {}
     // live: az utolsó 2 percben íródott – valószínűleg épp nyitva van máshol (pl. a gépen a Claude appban)
-    if (title.startsWith('[Lebegő Claude-gomb')) count = 0; // a lebegő gomb belső beszélgetései nem kellenek a listába
-    return { id: f.slice(0, -6), title: custom || title || '(üres)', mtime: st.mtimeMs, count, live: Date.now() - st.mtimeMs < 120000 };
+    if (title.startsWith('[Lebegő Claude-gomb') || title.startsWith('[Élő kamera')) count = 0; // a lebegő gomb belső beszélgetései nem kellenek a listába
+    return { id: f.slice(0, -6), title: custom || title || '(üres)', mtime: st.mtimeMs, count, live: othersLive(f.slice(0, -6), st.mtimeMs) };
   }).filter(s => s.count > 0).sort((a, b) => b.mtime - a.mtime).slice(0, 60);
 }
 
@@ -213,6 +213,13 @@ function resultText(c) {
 }
 
 // ---- Egy üzenet elküldése: `claude -p` futtatása, eredmény NDJSON-ként streamelve ----
+// a saját futásaink által legutóbb írt beszélgetések (id → idő) – ezek nem számítanak „máshol nyitva”-nak
+const ownWrites = new Map();
+function othersLive(id, mtime) {
+  if (Date.now() - mtime >= 120000) return false;
+  const own = ownWrites.get(id);
+  return !(own && (own === Infinity || mtime <= own + 5000));
+}
 function send(req, res, body, hooks = {}) {
   const cwd = body.cwd;
   if (!isDir(cwd)) return json(res, 400, { error: 'Nem létező mappa: ' + cwd });
@@ -221,6 +228,7 @@ function send(req, res, body, hooks = {}) {
   const modes = ['auto', 'acceptEdits', 'bypassPermissions', 'manual', 'dontAsk', 'plan'];
   if (modes.includes(body.mode)) args.push('--permission-mode', body.mode);
   if (body.model && /^[a-z0-9.\-\[\]]+$/i.test(body.model)) args.push('--model', body.model);
+  if (Array.isArray(body.content)) args.push('--input-format', 'stream-json'); // képes üzenet (élő kamera)
 
   const cfg = loadCfg();
   cfg.recent = [cwd, ...(cfg.recent || []).filter(p => p !== cwd)].slice(0, 12);
@@ -235,10 +243,13 @@ function send(req, res, body, hooks = {}) {
   runs.set(runId, child);
   log(`run start ${runId.slice(0, 8)} cwd=${cwd} session=${body.sessionId || 'new'} mode=${body.mode || '-'}`);
   child.stdin.on('error', () => {}); // ha a folyamat nem indult el, ne dőljön el a szerver (EPIPE)
-  child.stdin.end(String(body.prompt || ''));
+  child.stdin.end(Array.isArray(body.content)
+    ? JSON.stringify({ type: 'user', message: { role: 'user', content: body.content } }) + '\n'
+    : String(body.prompt || ''));
 
   if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
-  const emit = o => { if (o.kind === 'session' && hooks.onSession) hooks.onSession(o.id); if (hooks.onEmit) hooks.onEmit(o); try { res.write(JSON.stringify(o) + '\n'); } catch {} };
+  let sessId = null;
+  const emit = o => { if (o.kind === 'session') { sessId = o.id; ownWrites.set(o.id, Infinity); if (hooks.onSession) hooks.onSession(o.id); } if (hooks.onEmit) hooks.onEmit(o); try { res.write(JSON.stringify(o) + '\n'); } catch {} };
   emit({ kind: 'run', runId });
   streams.add(emit);
 
@@ -258,6 +269,7 @@ function send(req, res, body, hooks = {}) {
     if (finished) return; finished = true;
     runs.delete(runId);
     streams.delete(emit);
+    if (sessId) ownWrites.set(sessId, Date.now());
     if (buf.trim()) { try { translate(JSON.parse(buf), emit); } catch {} buf = ''; }
     if (code && errBuf.trim()) emit({ kind: 'error', text: errBuf.trim().slice(-3000) });
     emit({ kind: 'end', code });
@@ -364,6 +376,34 @@ async function bubble(req, res, body) {
   send(req, res, { cwd: HOME, sessionId: sid, prompt: pre.replace(/\]\n\n$/, '\n' + mem + ']\n\n') + text, mode: cfg.bubbleMode || 'auto' }, { onSession: save, onEmit });
 }
 
+// ---- Élő kamera: a live.html képkockát + kérdést küld, Claude közvetlenül a képet kapja (nincs Read-kör) ----
+const LIVE_MODES = {
+  what: 'Mi látható a képen? Mondd el röviden, a lényeget.',
+  translate: 'Fordítsd le a képen látható szöveget a felhasználó nyelvére (alapból magyarra). Csak a fordítást mondd, röviden tagolva.',
+  read: 'Olvasd fel a képen látható szöveget pontosan, úgy, ahogy írva van.',
+  window: 'Nyílászáró-szakértőként nézd meg: milyen nyílászáró/profil/vasalat/üvegezés ez (ha felismerhető, gyártó/rendszer is, pl. Schüco), milyen állapotban van, mi hiányzik vagy hibás. Röviden, szakmailag.',
+  live: 'ÉLŐ MÓD: folyamatosan kapod a kamera képét. Ha a kép lényegében ugyanaz, mint az előző, vagy nincs érdemi újdonság, válaszolj PONTOSAN egy kötőjellel: - . Különben egy rövid mondatban mondd el, mi új vagy érdekes.',
+};
+async function live(req, res, body) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image || ''));
+  if (!m) return json(res, 400, { error: 'Hiányzó vagy hibás kép' });
+  if (m[2].length > 8e6) return json(res, 413, { error: 'Túl nagy kép' });
+  const cfg = loadCfg();
+  let sid = cfg.liveSession;
+  if (body.newSession || !sid || Date.now() - (cfg.liveAt || 0) > 10 * 60000) sid = null;
+  const save = id => { const c = loadCfg(); c.liveSession = id; c.liveAt = Date.now(); saveCfg(c); };
+  if (sid) save(sid);
+  const task = String(body.text || '').trim() || LIVE_MODES[body.mode] || LIVE_MODES.what;
+  const pre = '[Élő kamera: a felhasználó a tablet kameráját valamire ráirányította; a csatolt kép az aktuális képkocka. ' +
+    'A választ felolvassuk, ezért legyen rövid (1–3 mondat), markdown nélkül, a felhasználó nyelvén (alapból magyar). ' +
+    'Eszközt ne használj, hacsak a felhasználó kifejezetten nem kér cselekvést.]\n\n';
+  const model = /^(haiku|sonnet|opus)$/.test(body.model) ? body.model : (cfg.liveModel || 'haiku');
+  send(req, res, {
+    cwd: HOME, sessionId: sid, mode: 'auto', model,
+    content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: pre + task }],
+  }, { onSession: save });
+}
+
 // ---- Ügynök: az app akadálymentességi szolgáltatása (képernyőkép, koppintás, gépelés ADB nélkül) ----
 // Az app nyitva tart egy GET /api/agent/listen streamet; a parancsok ezen mennek, az eredmény POST /api/agent/result-tal jön vissza.
 let agent = null;
@@ -452,7 +492,7 @@ function sessionSummary(fp, st) {
     }
     if (first && cwd) break;
   }
-  const r = { m: st.mtimeMs, cwd, bubble: !!first && first.startsWith('[Lebegő Claude-gomb'),
+  const r = { m: st.mtimeMs, cwd, bubble: !!first && (first.startsWith('[Lebegő Claude-gomb') || first.startsWith('[Élő kamera')),
               title: custom ? jsonStr(custom) : first ? first.slice(0, 90) : null,
               // a saját mappádban (pl. /root a tableten) indított beszélgetésnél: melyik projekten dolgozott valójában
               group: cwd && samePath(cwd, HOME) ? inferProject(head + '\n' + tail) : null };
@@ -526,7 +566,7 @@ function allSessions(limit = 100) {
     let s; try { s = sessionSummary(x.fp, x.st); } catch { continue; }
     // csak olyat, amit a tablet meg is tud nyitni (az előzmény a projekt mappájából töltődik)
     if (!s.title || s.bubble || skipProject(s.cwd) || projDir(s.cwd) !== x.dir) continue;
-    out.push({ id: x.id, title: s.title, mtime: x.st.mtimeMs, cwd: s.cwd, group: s.group || s.cwd, live: Date.now() - x.st.mtimeMs < 120000 });
+    out.push({ id: x.id, title: s.title, mtime: x.st.mtimeMs, cwd: s.cwd, group: s.group || s.cwd, live: othersLive(x.id, x.st.mtimeMs) });
   }
   return out;
 }
@@ -714,6 +754,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.pathname === '/api/agent/do' && req.method === 'POST') return agentHttp(req, res);
     if (u.pathname === '/api/bubble' && req.method === 'POST') return bubble(req, res, await readBody(req));
+    if (u.pathname === '/api/live' && req.method === 'POST') return live(req, res, await readBody(req));
     // a `tablet shot` ezzel rejti el a lebegő gombot a képernyőkép idejére
     if (u.pathname === '/api/overlay' && req.method === 'POST') {
       const show = u.searchParams.get('show') === '1';

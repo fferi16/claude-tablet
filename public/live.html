@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000">
+<title>Élő kamera</title>
+<style>
+:root{--accent:#d97757;--accent2:#e8957a;--glass:rgba(20,19,16,.62);--line:rgba(255,255,255,.14);--text:#f2f0ea;--muted:#b9b6ac}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:var(--text);font:17px/1.5 system-ui,Roboto,sans-serif;overflow:hidden;user-select:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.glass{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line)}
+.top{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;right:14px;display:flex;gap:10px;align-items:center}
+.top .sp{flex:1}
+.ib{height:48px;min-width:48px;padding:0 14px;border-radius:24px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:15px}
+.ib.on{background:var(--accent);border-color:var(--accent)}
+#ans{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 200px);width:min(880px,calc(100% - 28px));
+  max-height:38vh;overflow:auto;border-radius:20px;padding:16px 20px;font-size:20px;line-height:1.5;display:none;user-select:text}
+#ans .q{font-size:14px;color:var(--muted);margin-bottom:6px}
+#ans.busy .t::after{content:'▍';animation:bl 1s steps(2) infinite;color:var(--accent2)}
+@keyframes bl{50%{opacity:0}}
+.bottom{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;flex-direction:column;align-items:center;gap:14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 12px}
+.chip{height:42px;padding:0 16px;border-radius:21px;font-size:15px}
+.chip.sel{background:#fff;color:#111;border-color:#fff}
+.row{display:flex;align-items:center;gap:28px}
+#shoot{width:84px;height:84px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center}
+#shoot i{width:62px;height:62px;border-radius:50%;background:#fff;transition:all .2s}
+#shoot.busy i{width:30px;height:30px;border-radius:8px;background:var(--accent)}
+.side{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
+.side.on{background:var(--accent);border-color:var(--accent)}
+#mic.on{animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(217,119,87,.7)}100%{box-shadow:0 0 0 18px rgba(217,119,87,0)}}
+#liveDot{position:fixed;top:calc(env(safe-area-inset-top,0px) + 78px);left:50%;transform:translateX(-50%);padding:6px 14px;border-radius:16px;font-size:14px;display:none}
+#liveDot b{display:inline-block;width:9px;height:9px;border-radius:50%;background:#e25555;margin-right:7px;animation:bl 1.4s steps(2) infinite}
+#err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:18px;background:#111}
+#err button{margin-top:18px;padding:12px 22px;border-radius:24px;background:var(--accent)}
+#heard{font-size:15px;color:var(--muted);min-height:1.3em;text-align:center;padding:0 20px;text-shadow:0 1px 3px #000}
+</style>
+</head>
+<body>
+<video id="v" autoplay playsinline muted></video>
+
+<div class="top">
+  <button class="ib glass" onclick="goBack()" aria-label="Vissza">←</button>
+  <div class="sp"></div>
+  <button class="ib glass" id="modelBtn" onclick="toggleModel()"></button>
+  <button class="ib glass" id="ttsBtn" onclick="toggleTts()"></button>
+  <button class="ib glass" onclick="newChat()" data-t="Új">＋ Új</button>
+  <button class="ib glass" onclick="flip()" aria-label="Kamera váltás">⟲</button>
+</div>
+<div id="liveDot" class="glass"><b></b><span data-t="1">Élő – figyelem a képet</span></div>
+
+<div id="ans" class="glass"><div class="q" id="ansQ"></div><div class="t" id="ansT"></div></div>
+
+<div class="bottom">
+  <div id="heard"></div>
+  <div class="chips" id="chips"></div>
+  <div class="row">
+    <button class="side glass" id="live" onclick="toggleLive()" aria-label="Élő mód">◉</button>
+    <button id="shoot" onclick="shoot()" aria-label="Kérdezés"><i></i></button>
+    <button class="side glass" id="mic" onclick="toggleMic()" aria-label="Kérdezz hangon">🎤</button>
+  </div>
+</div>
+
+<div id="err"><div><div id="errT"></div><button onclick="startCam()" data-t="1">Újra</button></div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const EN = (localStorage.ct_lang || 'auto') === 'en' || ((localStorage.ct_lang || 'auto') === 'auto' && !/^hu/i.test((window.ClaudeApp?.sysLang?.() || navigator.language || 'hu')));
+const D = { 'Mi ez?': 'What is it?', 'Fordítsd': 'Translate', 'Olvasd fel': 'Read aloud', 'Nyílászáró': 'Window/door', 'Gyors': 'Fast', 'Okos': 'Smart',
+  '＋ Új': '＋ New', 'Élő – figyelem a képet': 'Live – watching', 'Újra': 'Retry', 'Gondolkodik…': 'Thinking…', 'Hallgatlak…': 'Listening…',
+  'Nem érem el a kamerát. Engedélyezd a kamerát a Claude Tablet appnak (Beállítások → Alkalmazások → Claude Tablet → Engedélyek).':
+  'Cannot access the camera. Allow camera for Claude Tablet (Settings → Apps → Claude Tablet → Permissions).', 'Hiba: ': 'Error: ',
+  'Új beszélgetés': 'New conversation', 'Felolvasás be': 'Speech on', 'Felolvasás ki': 'Speech off' };
+const t = s => EN && D[s] || s;
+document.querySelectorAll('[data-t]').forEach(e => e.textContent = t(e.textContent));
+if (EN) document.documentElement.lang = 'en';
+
+const MODES = [['what', 'Mi ez?'], ['translate', 'Fordítsd'], ['read', 'Olvasd fel'], ['window', 'Nyílászáró']];
+let mode = localStorage.live_mode || 'what';
+let model = localStorage.live_model || 'haiku';
+let tts = localStorage.live_tts !== '0';
+let facing = 'environment', stream = null, busy = false, ctrl = null, runId = null, fresh = false;
+let liveOn = false, liveTimer = null, lastSig = null, lastSent = 0, listening = false;
+const v = $('#v');
+
+function drawChips() {
+  $('#chips').innerHTML = MODES.map(([k, l]) => `<button class="chip glass${k === mode ? ' sel' : ''}" data-k="${k}">${t(l)}</button>`).join('');
+  $('#chips').querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    const same = mode === b.dataset.k; mode = b.dataset.k; localStorage.live_mode = mode; drawChips();
+    if (!busy || !same) shoot(); // a gyorsgomb egyből kérdez is
+  });
+}
+function drawTop() {
+  $('#modelBtn').textContent = model === 'haiku' ? '⚡ ' + t('Gyors') : '🧠 ' + t('Okos');
+  $('#ttsBtn').textContent = tts ? '🔊' : '🔇';
+  $('#ttsBtn').classList.toggle('on', tts);
+}
+function toggleModel() { model = model === 'haiku' ? 'sonnet' : 'haiku'; localStorage.live_model = model; drawTop(); }
+function toggleTts() { tts = !tts; localStorage.live_tts = tts ? '1' : '0'; if (!tts) stopSpeak(); drawTop(); toast(t(tts ? 'Felolvasás be' : 'Felolvasás ki')); }
+function newChat() { fresh = true; stopAll(); $('#ans').style.display = 'none'; toast(t('Új beszélgetés')); }
+function goBack() { stopAll(); stopCam(); if (history.length > 1) history.back(); else location.href = '/'; }
+function toast(s) { $('#heard').textContent = s; clearTimeout(toast.t); toast.t = setTimeout(() => { if ($('#heard').textContent === s) $('#heard').textContent = ''; }, 1800); }
+
+// ---------- kamera ----------
+async function startCam() {
+  $('#err').style.display = 'none';
+  stopCam();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    v.srcObject = stream; await v.play().catch(() => {});
+  } catch (e) {
+    $('#errT').textContent = t('Nem érem el a kamerát. Engedélyezd a kamerát a Claude Tablet appnak (Beállítások → Alkalmazások → Claude Tablet → Engedélyek).') + ' (' + (e.name || e) + ')';
+    $('#err').style.display = 'flex';
+  }
+}
+function stopCam() { if (stream) stream.getTracks().forEach(x => x.stop()); stream = null; }
+function flip() { facing = facing === 'environment' ? 'user' : 'environment'; startCam(); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopCam(); setLive(false); } else startCam(); });
+
+function frame(max = 1280) {
+  if (!v.videoWidth) return null;
+  const s = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+// kis szürke „ujjlenyomat” a változás-figyeléshez
+function sig() {
+  if (!v.videoWidth) return null;
+  const c = sig.c || (sig.c = Object.assign(document.createElement('canvas'), { width: 24, height: 16 }));
+  const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(v, 0, 0, 24, 16);
+  const d = x.getImageData(0, 0, 24, 16).data, o = new Float32Array(384);
+  for (let i = 0; i < 384; i++) o[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  return o;
+}
+function diff(a, b) { if (!a || !b) return 999; let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; }
+
+// ---------- kérdezés ----------
+async function ask(text, m) {
+  const img = frame(); if (!img) return;
+  stopAll(true);
+  busy = true; $('#shoot').classList.add('busy');
+  const isLive = m === 'live';
+  const label = text || t(MODES.find(x => x[0] === m)?.[1] || '');
+  const box = $('#ans'), out = $('#ansT');
+  if (!isLive) { box.style.display = 'block'; $('#ansQ').textContent = label; out.textContent = ''; box.classList.add('busy'); $('#heard').textContent = t('Gondolkodik…'); }
+  lastSig = sig(); lastSent = Date.now();
+  ctrl = new AbortController();
+  let acc = '', final = '';
+  try {
+    const r = await fetch('/api/live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+      body: JSON.stringify({ image: img, text, mode: m, model, newSession: fresh }) });
+    fresh = false;
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1); if (!line.trim()) continue;
+        let o; try { o = JSON.parse(line); } catch { continue; }
+        if (o.kind === 'run') runId = o.runId;
+        else if (o.kind === 'delta') { acc += o.text; if (!isLive || !/^\s*[-–]\s*$/.test(acc)) show(acc, label, isLive); }
+        else if (o.kind === 'text') final = o.text;
+        else if (o.kind === 'error') throw new Error(o.text);
+      }
+    }
+    const ans = (final || acc).trim();
+    if (isLive && /^[-–—.]?$/.test(ans)) { /* nincs újdonság */ }
+    else { show(ans, label, isLive); speak(ans); }
+  } catch (e) {
+    if (e.name !== 'AbortError') { box.style.display = 'block'; out.textContent = t('Hiba: ') + (e.message || e); }
+  } finally {
+    busy = false; runId = null; ctrl = null; $('#shoot').classList.remove('busy'); box.classList.remove('busy');
+    if ($('#heard').textContent === t('Gondolkodik…')) $('#heard').textContent = '';
+  }
+}
+function show(s, label, isLive) {
+  const box = $('#ans'); box.style.display = 'block';
+  if (isLive) $('#ansQ').textContent = '◉ ' + t('Élő – figyelem a képet');
+  $('#ansT').textContent = s.replace(/\*\*|__|`|^#+\s/gm, '');
+  box.scrollTop = box.scrollHeight;
+}
+function shoot() { if (busy) { stopAll(); return; } ask('', mode); }
+function stopAll(keepBox) {
+  if (ctrl) ctrl.abort();
+  if (runId) fetch('/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId }) }).catch(() => {});
+  runId = null; stopSpeak();
+}
+function speak(s) {
+  if (!tts || !s) return;
+  s = s.replace(/[*_`#>]/g, '').slice(0, 3000);
+  try { if (window.ClaudeApp?.speak) return ClaudeApp.speak(s); } catch {}
+  if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(s); u.lang = EN ? 'en-US' : 'hu-HU'; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+}
+function stopSpeak() { try { window.ClaudeApp?.stopSpeaking?.(); } catch {} try { speechSynthesis.cancel(); } catch {} }
+
+// ---------- élő mód: ha a kép érdemben megváltozik, magától szól ----------
+function setLive(on) {
+  liveOn = on; $('#live').classList.toggle('on', on); $('#liveDot').style.display = on ? 'block' : 'none';
+  clearInterval(liveTimer); liveTimer = null;
+  if (on) { lastSig = null; liveTimer = setInterval(liveTick, 1200); liveTick(); }
+}
+function toggleLive() { setLive(!liveOn); }
+function liveTick() {
+  if (!liveOn || busy || listening || document.hidden) return;
+  const s = sig(); const d = diff(s, lastSig);
+  // akkor kérdez, ha a kép változott (és már 4 mp telt el), vagy 25 mp óta nem kérdezett
+  if ((d > 14 && Date.now() - lastSent > 4000) || Date.now() - lastSent > 25000) ask('', 'live');
+}
+
+// ---------- hang: kérdezz a képről ----------
+function toggleMic() {
+  if (listening) { try { ClaudeApp.stopListening(); } catch {} return; }
+  if (!window.ClaudeApp?.startListening) { toast('🎤 ✗'); return; }
+  stopSpeak(); listening = true; $('#mic').classList.add('on'); $('#heard').textContent = t('Hallgatlak…');
+  ClaudeApp.startListening('');
+}
+window.onVoice = (type, text) => {
+  if (type === 'partial') $('#heard').textContent = text;
+  else if (type === 'final') { listening = false; $('#mic').classList.remove('on'); $('#heard').textContent = text; if (text.trim()) ask(text.trim(), mode); }
+  else if (type === 'error') { listening = false; $('#mic').classList.remove('on'); if (text !== 'cancel') toast(text); }
+};
+// a kép megérintése = ugyanaz, mint a nagy gomb
+v.addEventListener('click', () => { if (!busy) shoot(); });
+
+drawChips(); drawTop(); startCam();
+</script>
+</body>
+</html>

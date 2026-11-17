@@ -125,7 +125,8 @@ public class MainActivity extends Activity {
     static final long WAKE_AFTER_MS = 5000;
     static final String PERM_RUN = "com.termux.permission.RUN_COMMAND";
     static final String PERM_NOTIF = "android.permission.POST_NOTIFICATIONS";
-    static final int REQ_RUN = 1, REQ_NOTIF = 2, REQ_FILE = 3, REQ_MIC = 4;
+    static final int REQ_RUN = 1, REQ_NOTIF = 2, REQ_FILE = 3, REQ_MIC = 4, REQ_CAM = 5;
+    android.webkit.PermissionRequest camReq;
     static final String PERM_MIC = Manifest.permission.RECORD_AUDIO;
     static final long POLL_MS = 700, TIMEOUT_MS = 25000;
 
@@ -485,6 +486,21 @@ public class MainActivity extends Activity {
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest r) {
+                // élő kamera (live.html): csak a saját (helyi) oldalunknak adunk kamerát
+                ui.post(new Runnable() { public void run() {
+                    boolean cam = java.util.Arrays.asList(r.getResources()).contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+                    if (!cam || !isLocal(r.getOrigin())) { r.deny(); return; }
+                    if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        r.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                    } else {
+                        if (camReq != null) camReq.deny();
+                        camReq = r;
+                        requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
+                    }
+                } });
+            }
+            @Override
             public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
                 android.util.Log.i("ClaudeTabletJS", m.message() + " @" + m.lineNumber());
                 return true;
@@ -708,6 +724,15 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        if (req == REQ_CAM) {
+            if (camReq != null) {
+                if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED)
+                    camReq.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                else camReq.deny();
+                camReq = null;
+            }
+            return;
+        }
         if (req == REQ_MIC) {
             if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) startRec(pendingLang);
             else voiceEvent("error", L.t("Nincs mikrofon-engedély. Beállítások → Alkalmazások → Claude Tablet → Engedélyek."));

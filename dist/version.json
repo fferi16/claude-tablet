@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.10.0",
+  "versionCode": 15,
+  "versionName": "1.11.0",
   "apk": "https://github.com/fferi16/claude-tablet/raw/main/dist/claude-tablet.apk",
-  "notes": "Biztonsági frissítés: a motort csak ez az app és a saját oldala vezérelheti (más app / weboldal nem). Frissítés után: sh /root/claude-tablet/install.sh"
+  "notes": "Élő kamera (menü → 📷 Élő kamera): Claude megmondja, mit lát, fordít, felolvas, nyílászárót elemez. Frissítés után: cd /root/claude-tablet && git pull && sh install.sh"
 }

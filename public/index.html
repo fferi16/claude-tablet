@@ -195,7 +195,7 @@ const LANG = (() => {
 const LOCALE = LANG === 'hu' ? 'hu-HU' : (navigator.language || 'en-US');
 function setLang(v) { localStorage.setItem('ct_lang', JSON.stringify(v)); try { window.ClaudeApp?.setLang && ClaudeApp.setLang(v); } catch {} location.reload(); }
 const EN = {
-'Új beszélgetés':'New chat','＋ Új beszélgetés':'＋ New chat','⚡ Lebegő gomb: gyors gombok':'⚡ Floating button: quick actions','✓ Beállítás-ellenőrző':'✓ Setup check',
+'Új beszélgetés':'New chat','＋ Új beszélgetés':'＋ New chat','⚡ Lebegő gomb: gyors gombok':'⚡ Floating button: quick actions','📷 Élő kamera':'📷 Live camera','✓ Beállítás-ellenőrző':'✓ Setup check',
 'Korábbi beszélgetések':'Previous chats','Engedélyek':'Permissions','Automatikus (ajánlott)':'Automatic (recommended)','Szerkesztés OK':'Edits OK','Csak tervez':'Plan only',
 'Mindent szabad ⚠':'Allow everything ⚠','Csak engedélyezett':'Only allowed','↻ Motor újraindítása':'↻ Restart engine','Diktálás után':'After dictation','Javíthatom':'Let me edit',
 'Azonnal küldi':'Send immediately','Válasz felolvasása':'Read replies aloud','Ki':'Off','Be':'On','Lebegő Claude-gomb':'Floating Claude button',
@@ -279,6 +279,7 @@ if (LANG === 'en') {
       <span style="color:var(--muted)">▾</span>
     </button>
     <button class="newbtn" onclick="newChat()">＋ Új beszélgetés</button>
+    <button class="chip" id="liveBtn" style="margin:0 12px 8px;text-align:center" onclick="drawer(false);location.href='/live.html'">📷 Élő kamera</button>
     <button class="chip" id="chipsBtn" style="display:none;margin:0 12px 8px;text-align:center" onclick="drawer(false);chipsTa.value=ClaudeApp.getChips();chipsDlg.showModal()">⚡ Lebegő gomb: gyors gombok</button>
     <button class="chip" id="setupBtn" style="display:none;margin:0 12px 8px;text-align:center" onclick="drawer(false);openSetup()">✓ Beállítás-ellenőrző</button>
     <div class="sect">Korábbi beszélgetések <span><button id="sessScope" onclick="toggleScope()"></button><button onclick="loadSessions()">↻</button></span></div>
