@@ -55,8 +55,15 @@ if in_ubuntu true; then
   ok "Ubuntu már telepítve"
 else
   say "Ubuntu telepítése (~500 MB letöltés)…"
-  proot-distro install $DISTRO
-  ok "Ubuntu kész"
+  log=$(mktemp)
+  if proot-distro install $DISTRO 2>&1 | tee "$log"; [ "${PIPESTATUS[0]}" -eq 0 ]; then
+    ok "Ubuntu kész"
+  elif grep -qi "already exists" "$log"; then
+    ok "Ubuntu már telepítve"
+  else
+    rm -f "$log"; die "Az Ubuntu telepítése nem sikerült (lásd fent)."
+  fi
+  rm -f "$log"
 fi
 
 # --- 3–4. Ubuntu belseje: Node, Claude Code, motor --------------------------
