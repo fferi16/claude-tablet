@@ -49,8 +49,9 @@ ok "Külső appok engedélyezve (allow-external-apps)"
 # --- 2. Ubuntu -------------------------------------------------------------
 say "proot-distro és curl telepítése…"
 pkg install -y proot-distro curl
-ROOTFS=$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO
-if [ -d "$ROOTFS/root" ]; then
+# A proot-distro 5.x új helyre teszi a konténert – ezért a mappa helyett belépéssel ellenőrzünk.
+in_ubuntu() { proot-distro login $DISTRO -- "$@" </dev/null >/dev/null 2>&1; }
+if in_ubuntu true; then
   ok "Ubuntu már telepítve"
 else
   say "Ubuntu telepítése (~500 MB letöltés)…"
@@ -93,7 +94,7 @@ UBUNTU
 ok "Ubuntu oldal kész"
 
 # --- 5. Bejelentkezés ------------------------------------------------------
-if [ -s "$ROOTFS/root/.claude/.credentials.json" ]; then
+if in_ubuntu test -s /root/.claude/.credentials.json; then
   ok "Claude Code-ba már be vagy jelentkezve"
 else
   printf "\n${c_warn}Most jelentkezz be a Claude Code-ba:${c_off}\n"
@@ -102,7 +103,7 @@ else
   echo "  3. Ha a Claude válaszol, írd be:  /exit"
   printf "Nyomj Entert a kezdéshez… "; read -r _ </dev/tty
   proot-distro login $DISTRO -- claude </dev/tty || true
-  [ -s "$ROOTFS/root/.claude/.credentials.json" ] && ok "Bejelentkezve" || \
+  in_ubuntu test -s /root/.claude/.credentials.json && ok "Bejelentkezve" || \
     warn "Nem látom a bejelentkezést. Később: proot-distro login ubuntu, majd: claude (API-kulccsal ez normális)"
 fi
 
